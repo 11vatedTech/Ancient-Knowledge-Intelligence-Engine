@@ -489,7 +489,28 @@ def cmd_ocr(args: argparse.Namespace) -> int:
     if args.action == "providers":
         _emit({"providers": provider_status()})
         return 0
+    import json
     from pathlib import Path
+
+    if args.action == "evaluate":
+        from .ocr_eval import evaluate, evaluation_fingerprint, sample_pages
+
+        try:
+            engine = resolve_provider(args.provider)
+        except OcrUnavailable as exc:
+            _emit({"error": str(exc)})
+            return 2
+        samples = sample_pages(database, args.blob_root, limit=args.samples)
+        if not samples:
+            _emit({"error": "no page has both a stored image and an embedded text layer"})
+            return 2
+        report = evaluate(samples, engine)
+        report["fingerprint"] = evaluation_fingerprint(report)
+        destination = Path(args.out)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        _emit({key: value for key, value in report.items() if key != "pages"})
+        return 0
 
     try:
         engine = resolve_provider(args.provider)
@@ -734,6 +755,14 @@ def build_parser() -> argparse.ArgumentParser:
     ocr_sub = ocr_cmd.add_subparsers(dest="action", required=True)
     ocr_providers = ocr_sub.add_parser("providers", help="report available OCR engines")
     ocr_providers.set_defaults(func=cmd_ocr, provider=None, edition=None, page=None)
+    ocr_evaluate = ocr_sub.add_parser(
+        "evaluate", help="score OCR against embedded text layers on real pages"
+    )
+    ocr_evaluate.add_argument("--samples", type=int, default=30)
+    ocr_evaluate.add_argument("--provider", default=None)
+    ocr_evaluate.add_argument("--out", default=".aki/ocr-eval.json")
+    ocr_evaluate.set_defaults(func=cmd_ocr, edition=None, page=None)
+
     ocr_page = ocr_sub.add_parser("page", help="OCR one already-rendered page image")
     ocr_page.add_argument("--edition", required=True)
     ocr_page.add_argument("--page", type=int, required=True)

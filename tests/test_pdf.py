@@ -1,6 +1,5 @@
+import pymupdf
 import pytest
-
-pymupdf = pytest.importorskip("pymupdf")
 
 from aki.blob_store import ContentAddressedStore
 from aki.domain import ProcessingOperation, RightsGrant, RightsStatus
@@ -65,5 +64,6 @@ def test_render_rejects_excessive_dpi(tmp_path):
     make_pdf(source, page_count=1)
     with pytest.raises(ValueError, match="dpi"):
         PDFPageProcessor().render_to_store(
-            source, "edition-001", storage_grant(), ContentAddressedStore(tmp_path / "blobs"), dpi=900
+            source, "edition-001", storage_grant(),
+            ContentAddressedStore(tmp_path / "blobs"), dpi=900
         )

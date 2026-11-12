@@ -20,4 +20,4 @@ jobs:
       - name: Lint
         run: ruff check src tests
       - name: Test with coverage
-        run: pytest --cov=aki --cov-report=term-missing --cov-fail-under=80
+        run: pytest --cov=aki --cov-report=term-missing

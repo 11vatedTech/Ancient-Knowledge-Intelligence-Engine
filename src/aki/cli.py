@@ -15,7 +15,8 @@ from .db import Database, initialize
 from .doctor import run_doctor
 from .domain import ProcessingOperation
 from .evidence import resolve_citation
-from .ingest import IngestError, ingest_pdf
+from .ingest import IngestError, ingest_pdf, pending_editions
+from .ocr import OcrUnavailable, provider_status, resolve_provider
 from .inventory import (
     CatalogConfig,
     acquisition_report,
@@ -396,11 +397,110 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         result = ingest_pdf(
             database, args.blob_root, args.pdf,
             edition_id=args.edition_id, dpi=args.dpi,
+            ocr=bool(getattr(args, "ocr", False)), provider_name=args.provider,
         )
-    except (IngestError, PermissionError) as exc:
+    except (IngestError, PermissionError, OcrUnavailable) as exc:
         _emit({"error": str(exc), "ingested": False})
         return 2
     _emit(result.to_dict())
+    return 0
+
+
+def cmd_ingest_batch(args: argparse.Namespace) -> int:
+    """Ingest every acquired edition that has no rendered pages yet.
+
+    Resumability comes from the database, not a side manifest: an edition drops out of
+    ``pending_editions`` the moment its first page row is committed, so re-running after
+    an interruption continues rather than repeating.
+    """
+    import json
+    import time
+    from pathlib import Path
+
+    from .db import utcnow
+
+    database = _database(args)
+    pending = pending_editions(database, args.blob_root)
+    if args.edition_id:
+        pending = [(edition, path) for edition, path in pending if edition == args.edition_id]
+    if args.limit is not None:
+        pending = pending[: args.limit]
+
+    engine = None
+    if args.ocr:
+        try:
+            engine = resolve_provider(args.provider)
+        except OcrUnavailable as exc:
+            _emit({"error": str(exc), "started": False})
+            return 2
+
+    log = Path(args.log)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    totals = {"editions": len(pending), "succeeded": 0, "failed": 0, "skipped": 0,
+              "pages": 0, "pages_ocr": 0, "evidence": 0, "chunks": 0}
+    errors: list[str] = []
+    with log.open("a", encoding="utf-8") as handle:
+        for edition_id, pdf_path in pending:
+            record: dict[str, object] = {"edition_id": edition_id, "started_at": utcnow()}
+            try:
+                result = ingest_pdf(
+                    database, args.blob_root, pdf_path, edition_id=edition_id,
+                    dpi=args.dpi, ocr=args.ocr, ocr_provider=engine,
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad edition must not stop the pass
+                totals["failed"] += 1
+                message = f"{edition_id}: {type(exc).__name__}: {exc}"
+                errors.append(message)
+                record.update({"status": "failed", "error": message})
+            else:
+                if result.skipped:
+                    totals["skipped"] += 1
+                    record["status"] = "skipped"
+                else:
+                    totals["succeeded"] += 1
+                    totals["pages"] += result.pages_rendered
+                    totals["pages_ocr"] += result.pages_ocr
+                    totals["evidence"] += result.evidence_created
+                    totals["chunks"] += result.chunks_indexed
+                    record.update({"status": "completed", **result.to_dict()})
+            record["finished_at"] = utcnow()
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+            handle.flush()
+    totals["errors"] = errors[:20]
+    totals["elapsed_seconds"] = round(time.time() - started, 1)
+    _emit(totals)
+    return 0 if totals["failed"] == 0 else 1
+
+
+def cmd_ocr(args: argparse.Namespace) -> int:
+    database = _database(args)
+    if args.action == "providers":
+        _emit({"providers": provider_status()})
+        return 0
+    from pathlib import Path
+
+    try:
+        engine = resolve_provider(args.provider)
+    except OcrUnavailable as exc:
+        _emit({"error": str(exc)})
+        return 2
+    with database.connect() as connection:
+        row = connection.execute(
+            "SELECT p.id, p.page_image_key FROM pages p JOIN assets a ON a.id = p.asset_id"
+            " WHERE a.edition_id = ? AND p.page_index = ?",
+            (args.edition, args.page),
+        ).fetchone()
+    if row is None:
+        _emit({"error": f"edition {args.edition} has no rendered page {args.page}"})
+        return 2
+    image = Path(args.blob_root) / row["page_image_key"]
+    if not image.exists():
+        _emit({"error": f"page image is missing from the vault: {row['page_image_key']}"})
+        return 2
+    recognised = engine.ocr(image)
+    _emit({"page_id": row["id"], "image": str(image), **recognised.to_dict(),
+           "text": recognised.text[:4000]})
     return 0
 
 
@@ -600,7 +700,31 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("edition_id")
     ingest.add_argument("pdf")
     ingest.add_argument("--dpi", type=int, default=300)
+    ingest.add_argument("--ocr", action="store_true",
+                        help="OCR pages whose embedded text layer is missing or too short")
+    ingest.add_argument("--provider", default=None, choices=["rapidocr", "tesseract"])
     ingest.set_defaults(func=cmd_ingest)
+
+    batch = sub.add_parser(
+        "ingest-batch", help="ingest every acquired edition in one resumable pass"
+    )
+    batch.add_argument("--dpi", type=int, default=200)
+    batch.add_argument("--ocr", action="store_true")
+    batch.add_argument("--provider", default=None, choices=["rapidocr", "tesseract"])
+    batch.add_argument("--limit", type=int, default=None)
+    batch.add_argument("--edition-id", default=None)
+    batch.add_argument("--log", default=".aki/ingest-progress.jsonl")
+    batch.set_defaults(func=cmd_ingest_batch)
+
+    ocr_cmd = sub.add_parser("ocr", help="OCR engine status and page-level recognition")
+    ocr_sub = ocr_cmd.add_subparsers(dest="action", required=True)
+    ocr_providers = ocr_sub.add_parser("providers", help="report available OCR engines")
+    ocr_providers.set_defaults(func=cmd_ocr, provider=None, edition=None, page=None)
+    ocr_page = ocr_sub.add_parser("page", help="OCR one already-rendered page image")
+    ocr_page.add_argument("--edition", required=True)
+    ocr_page.add_argument("--page", type=int, required=True)
+    ocr_page.add_argument("--provider", default=None)
+    ocr_page.set_defaults(func=cmd_ocr)
 
     search_cmd = sub.add_parser("search", help="lexical full-text search")
     search_cmd.add_argument("query")

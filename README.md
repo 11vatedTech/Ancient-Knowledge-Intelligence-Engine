@@ -35,7 +35,9 @@ All **257** records of The Holy Word's public catalog were enumerated, imported 
 
 Acquisition ran under a **self-attested permission** recorded at [`docs/execution/PERMISSION_ATTESTATION.md`](docs/execution/PERMISSION_ATTESTATION.md), which states plainly that it is an assertion by the claimant rather than an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
 
-**Acquired is not readable.** None of the 257 editions has been rendered or transcribed yet, so the corpus is bytes on disk rather than searchable evidence — the OCR layer is the blocking gap. See [`ACQUISITION_REPORT.md`](docs/execution/ACQUISITION_REPORT.md) and [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md).
+**OCR is wired in.** Ingestion renders each page, uses the embedded text layer where one exists, and falls back to RapidOCR (PP-OCRv4 on ONNX Runtime, offline, CPU) for scanned pages — recording the engine, version, confidence and per-line boxes on every transcription. `aki ocr providers` reports what is available; `aki ingest-batch --ocr` runs the whole corpus in one resumable pass.
+
+See [`ACQUISITION_REPORT.md`](docs/execution/ACQUISITION_REPORT.md) and [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md) for what is and is not yet true of the processed corpus.
 
 ## Development
 

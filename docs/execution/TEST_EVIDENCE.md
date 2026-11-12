@@ -177,6 +177,34 @@ quick_check: ok   foreign_key_violations: 0   schema_version: 2   ok: true
 
 Migration 2 and the asset-table repair are documented in `INCIDENT_REPAIR.md`. The repair re-derived 256 asset rows from the run report, verifying each blob's on-disk size against the recorded size before insert; 0 errors.
 
+### OCR (RapidOCR / ONNX, CPU)
+
+```
+$ aki ocr providers
+rapidocr   available: true   RapidOCR-PP-OCRv4 / 1.2.3
+tesseract  available: false  (binary not on PATH)
+```
+
+Measured on a real corpus scan (*The Key to Mental and Physical Power*, 1897), 150 DPI:
+
+```
+per-page: 4.10s / 2.12s / 5.67s      chars: 1364 / 4 / 344
+mean confidence: 0.894 / 0.567 / 0.852
+```
+
+End-to-end ingestion of a real scanned edition (*The Lost Books of The Bible — Gospel
+According To Peter*), 5 pages, 1 OCR'd:
+
+```
+pages_rendered: 5   pages_ocr: 1   evidence_created: 5   chunks_indexed: 5   elapsed: 6.1s
+recognised: "THE LOST GOSPEL ACCORDING TO PETER / Anonymous"  confidence 0.853
+search "the" now returns this corpus text, not the fixture
+```
+
+Unit coverage: `tests/test_ocr.py` — provider availability reporting, unknown-provider
+rejection, scan-without-OCR records empty text, scan-with-OCR records engine identity +
+confidence + geometry + evidence, and text-layer pages are never overwritten by OCR.
+
 ## What is **not** tested
 
 - OCR / HTR accuracy — no engine installed, no labelled set, **no CER measured**

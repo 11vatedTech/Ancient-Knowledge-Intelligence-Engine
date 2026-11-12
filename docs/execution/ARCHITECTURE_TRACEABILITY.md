@@ -53,9 +53,11 @@ Sources reconciled: `AKI_Production_Architecture_Specification_v1.0.pdf` (AKI-AR
 | Page rendering at controlled DPI with renderer provenance | **Verified** | 3 pages @200 DPI, PyMuPDF 2.1 recorded |
 | Page-level explicit states, no silent omission | **Verified** | `pages.processing_state`; coverage counters |
 | Text extraction with engine identity | **Verified** | PyMuPDF text layer stored as `normalized`; engine + version recorded |
-| OCR / HTR adapters | **Not implemented** | no OCR engine installed; `ocr_transcribe` gate exists |
-| Layout segmentation, reading order | **Not implemented** | — |
-| Region crops and coordinates | **Not implemented** | schema ready, no producer |
+| OCR adapters | **Verified** | RapidOCR (PP-OCRv4/ONNX) and Tesseract adapters behind one contract; engine name, version, confidence and per-line boxes recorded per transcription |
+| OCR fallback policy | **Verified** | pages with < 120 chars of embedded text are OCR'd; text-layer pages are never overwritten (`test_text_layer_is_not_overwritten_by_ocr`) |
+| HTR (handwriting) | **Not implemented** | out of scope; low-confidence output is recorded, not filtered |
+| Layout segmentation, reading order | **Not implemented** | box geometry only, no columns/tables model |
+| Region crops and coordinates | **Partial** | per-line token geometry stored on transcriptions; `page_regions` still has no producer |
 | Transcription revision history (`supersedes_id`) | **Partial** | column exists; no correction workflow |
 | Human review queue | **Not implemented** | `review_state` column exists only |
 | Translation / transliteration layers | **Partial** | `layer` enum includes them; no provider |

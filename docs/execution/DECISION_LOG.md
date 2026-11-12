@@ -94,6 +94,18 @@ Architecture decision records for this implementation pass. Each records context
 
 ---
 
+## ADR-014 — OCR provider: RapidOCR on ONNX Runtime, behind a provider contract
+
+**Context.** 99 of 249 PDFs in the acquired corpus have no text layer, and 0 editions had ever been rendered. Tesseract was not installed and would require a system-wide binary; Python 3.14 rules out several ML stacks.
+
+**Decision.** Implement OCR as a *provider contract* (`OcrProvider`) with two adapters, and select at runtime: an explicitly requested provider, else RapidOCR, else Tesseract, else fail with an actionable error. RapidOCR ships PP-OCRv4 models inside the wheel, runs on the ONNX Runtime already present, needs no network access after install, and needs no external binary.
+
+**Consequence.** Measured on real corpus pages: ~0.85 mean confidence, clean text from a 1930s scan, roughly 2–4 s per page at 150 DPI on CPU. Every transcription records `engine_name`, `engine_version`, `confidence` and per-line boxes, so a better model later supersedes the text without touching the archived original. Choosing a different engine is a constructor call, not a rewrite.
+
+**Rejected alternatives.** (a) PaddleOCR — heavy dependency chain, GPU/CUDA friction, unlikely to install on Python 3.14. (b) Tesseract as the default — requires a system-wide install and elevation, and its accuracy on this material is not better. (c) Cloud OCR — violates local-first and would send restricted-origin material to a third party.
+
+---
+
 ## ADR-011 — Record the corpus permission as a labelled self-attestation
 
 **Context.** The source publishes no licence and no terms. The claimant stated in session that they are The Holy Word, a friend of [name withheld] and Joe Felz, and instructed acquisition.
@@ -113,6 +125,16 @@ Architecture decision records for this implementation pass. Each records context
 **Decision.** Migration 2 rebuilds `assets` without that constraint, keeping `UNIQUE(edition_id, sha256, asset_role)` so a single edition cannot store the same object twice in the same role, and adds a non-unique index on `sha256` for cross-edition lookup.
 
 **Consequence.** One blob can legitimately back several editions with full provenance. Rebuilding a table in SQLite requires care: the migration drops the dependent `v_coverage` view first and recreates it afterwards, and is now restart-safe against a stale `assets_v2`. See `INCIDENT_REPAIR.md` for the failure that motivated that hardening.
+
+---
+
+## ADR-015 — Resolve OCR text before evidence, not after
+
+**Context.** The first OCR integration ran the engine and wrote the transcription correctly, but the evidence loop re-read the PDF text layer instead of the resolved page text. Scanned pages therefore produced a transcription and zero evidence — the pipeline looked successful while contributing nothing searchable.
+
+**Decision.** Resolve each page's text once (text layer or OCR, whichever is authoritative) into a per-page map, and have both the transcription writer and the evidence/index writer read from that map. One resolution point, two consumers.
+
+**Consequence.** A page cannot be transcribed without also being evidence-indexed, which is what made the gap visible in `pages_ocr: 1, evidence: 0` rather than silently degrading the corpus. Covered by `test_scan_with_ocr_records_engine_identity_and_evidence`.
 
 ---
 

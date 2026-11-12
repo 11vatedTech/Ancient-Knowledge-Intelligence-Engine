@@ -14,6 +14,7 @@ from typing import Any
 from .blob_store import ContentAddressedStore
 from .db import Database, new_id, utcnow
 from .evidence import add_evidence
+from .ocr import OcrProvider, resolve_provider
 from .pdf import PDFPageProcessor, RenderedPage
 from .preflight import PreflightLimits, preflight
 from .rights import RightsDenied
@@ -37,6 +38,7 @@ class IngestResult:
     transcriptions_created: int
     evidence_created: int
     chunks_indexed: int
+    pages_ocr: int = 0
     skipped: bool = False
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
@@ -51,6 +53,7 @@ class IngestResult:
             "transcriptions_created": self.transcriptions_created,
             "evidence_created": self.evidence_created,
             "chunks_indexed": self.chunks_indexed,
+            "pages_ocr": self.pages_ocr,
             "skipped": self.skipped,
             "warnings": list(self.warnings),
         }
@@ -113,10 +116,23 @@ def ingest_pdf(
     dpi: int = 300,
     limits: PreflightLimits | None = None,
     extract_text_layer: bool = True,
+    ocr: bool = False,
+    ocr_provider: OcrProvider | None = None,
+    ocr_min_chars: int = 120,
+    provider_name: str | None = None,
 ) -> IngestResult:
-    """Archive, render and index one PDF for a rights-cleared edition."""
+    """Archive, render and index one PDF for a rights-cleared edition.
+
+    When ``ocr`` is enabled, any page whose embedded text layer yields fewer than
+    ``ocr_min_chars`` characters is passed to the OCR engine, and the resulting text is
+    recorded with that engine's identity and confidence. The archived original is never
+    modified, so a better model later supersedes the transcription instead of the file.
+    """
     database.require_current()
     decision_id = _require(database, edition_id)
+    engine: OcrProvider | None = None
+    if ocr:
+        engine = ocr_provider if ocr_provider is not None else resolve_provider(provider_name)
     source = Path(pdf_path).expanduser().resolve(strict=True)
     store = ContentAddressedStore(blob_root)
     report = preflight(source, limits)
@@ -128,13 +144,20 @@ def ingest_pdf(
     stored = store.put_path(source)
     archive_key = stored.path.relative_to(store.root).as_posix()
     existing = None
+    pages_present = False
     with database.connect() as connection:
         existing = connection.execute(
             "SELECT id, preflight_status FROM assets WHERE edition_id=? AND sha256=?"
             " AND asset_role='original_scan'",
             (edition_id, report.sha256),
         ).fetchone()
-    if existing is not None:
+        if existing is not None:
+            pages_present = connection.execute(
+                "SELECT 1 FROM pages WHERE asset_id=? LIMIT 1", (existing["id"],)
+            ).fetchone() is not None
+    # An asset that exists but has no pages is an *acquired* object that has never been
+    # rendered. Skipping it there would make acquisition and ingestion mutually exclusive.
+    if existing is not None and pages_present:
         return IngestResult(
             asset_id=existing["id"], edition_id=edition_id, sha256=report.sha256,
             pages_rendered=0, pages_recorded=0, pages_reused=0, transcriptions_created=0,
@@ -142,20 +165,23 @@ def ingest_pdf(
             warnings=("identical bytes already archived for this edition",),
         )
 
-    asset_id = new_id()
     now = utcnow()
-    with database.transaction() as connection:
-        connection.execute(
-            "INSERT INTO assets (id, edition_id, rights_decision_id, storage_key, sha256,"
-            " byte_size, detected_mime, original_filename, asset_role, acquired_at, immutable,"
-            " preflight_status, preflight_report, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                asset_id, edition_id, decision_id, archive_key, report.sha256,
-                report.byte_size, report.detected_mime, source.name, "original_scan",
-                now, 1, "passed", json.dumps(report.to_dict(), sort_keys=True), now,
-            ),
-        )
+    if existing is not None:
+        asset_id = str(existing["id"])
+    else:
+        asset_id = new_id()
+        with database.transaction() as connection:
+            connection.execute(
+                "INSERT INTO assets (id, edition_id, rights_decision_id, storage_key, sha256,"
+                " byte_size, detected_mime, original_filename, asset_role, acquired_at, immutable,"
+                " preflight_status, preflight_report, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    asset_id, edition_id, decision_id, archive_key, report.sha256,
+                    report.byte_size, report.detected_mime, source.name, "original_scan",
+                    now, 1, "passed", json.dumps(report.to_dict(), sort_keys=True), now,
+                ),
+            )
 
     processor = PDFPageProcessor()
     rendered: list[RenderedPage] = processor.render_to_store(
@@ -164,7 +190,8 @@ def ingest_pdf(
 
     page_rows: list[dict[str, Any]] = []
     transcription_ids: list[tuple[str, str]] = []
-    transcriptions_created = evidence_created = chunks = 0
+    resolved_text: dict[int, str] = {}
+    transcriptions_created = evidence_created = chunks = pages_ocr = 0
     text_layer: dict[int, str] = {}
     if extract_text_layer:
         text_layer = _extract_text_layer(source)
@@ -188,8 +215,22 @@ def ingest_pdf(
         page_rows.append({"page_id": page_id, "index": index, "label": page.page_label})
 
         text = text_layer.get(index, "").strip()
-        if not extract_text_layer:
+        engine_name = "PyMuPDF-text-layer"
+        engine_version = _pymupdf_version()
+        confidence: float | None = None
+        geometry = "[]"
+        if engine is not None and len(text) < ocr_min_chars:
+            recognised = engine.ocr(page.blob_path)
+            if recognised.text.strip():
+                text = recognised.text.strip()
+                engine_name = recognised.engine_name
+                engine_version = recognised.engine_version
+                confidence = recognised.confidence
+                geometry = recognised.geometry_json()
+                pages_ocr += 1
+        elif not extract_text_layer:
             continue
+        resolved_text[index] = text
         transcription_id = new_id()
         with database.transaction() as connection:
             connection.execute(
@@ -198,7 +239,7 @@ def ingest_pdf(
                 " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     transcription_id, page_id, "normalized", text, None,
-                    "PyMuPDF-text-layer", _pymupdf_version(), None, "[]", "unreviewed", utcnow(),
+                    engine_name, engine_version, confidence, geometry, "unreviewed", utcnow(),
                 ),
             )
         transcriptions_created += 1
@@ -210,7 +251,7 @@ def ingest_pdf(
         rendered,
         strict=False,
     ):
-        text = text_layer.get(page.page_number - 1, "").strip()
+        text = resolved_text.get(page.page_number - 1, "").strip()
         if not text:
             continue
         evidence_id = add_evidence(
@@ -247,8 +288,27 @@ def ingest_pdf(
         transcriptions_created=transcriptions_created,
         evidence_created=evidence_created,
         chunks_indexed=chunks,
+        pages_ocr=pages_ocr,
         warnings=report.warnings,
     )
+
+
+def pending_editions(database: Database, blob_root: str | Path) -> list[tuple[str, Path]]:
+    """Editions holding a PDF with no rendered pages yet, smallest first.
+
+    Resume state is the database itself: an edition disappears from this list as soon as
+    its first page row exists, so an interrupted batch continues where it stopped without
+    needing an external manifest.
+    """
+    root = Path(blob_root)
+    with database.connect() as connection:
+        rows = connection.execute(
+            "SELECT a.edition_id, a.storage_key, a.byte_size FROM assets a"
+            " WHERE a.detected_mime = 'application/pdf' AND a.asset_role = 'original_scan'"
+            " AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.asset_id = a.id)"
+            " ORDER BY a.byte_size ASC"
+        ).fetchall()
+    return [(str(row["edition_id"]), root / str(row["storage_key"])) for row in rows]
 
 
 def _permissive() -> Any:

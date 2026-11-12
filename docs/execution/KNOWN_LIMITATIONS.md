@@ -14,11 +14,18 @@ Root cause: there is no OCR layer (§2), and no batch render/ingest pass has bee
 
 Rights basis is a **self-attestation** by the claimant, not an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
 
-## 2. No OCR or HTR — the blocking gap
+## 2. OCR exists; HTR, layout analysis and proofing do not
 
-There is no OCR engine. The only text ingestion path is the PDF's embedded text layer (PyMuPDF). Scanned image-only PDFs produce pages and page images but **no text**, and therefore no searchable evidence.
+OCR is implemented: `src/aki/ocr.py` defines a provider contract with two adapters — RapidOCR (PP-OCRv4 via ONNX Runtime, models bundled in the wheel, fully offline) and Tesseract (used only if its binary is present). Ingestion falls back to OCR for any page whose embedded text layer yields fewer than 120 characters, and records the engine name, engine version, mean confidence and per-line boxes on each transcription.
 
-Most of the acquired corpus is scanned material, so this is the single largest functional gap in the platform: 257 archived editions cannot be read by the engine.
+**What this does not do:**
+
+- **No HTR.** Handwritten material is out of scope; the engine will produce low-confidence nonsense rather than refuse. Confidence is stored and visible precisely so this can be filtered, but nothing filters it automatically.
+- **No proofing or correction workflow.** Transcriptions are `unreviewed`. There is no human review queue and no diff against a second engine pass.
+- **No layout analysis or reading order beyond box geometry.** Multi-column pages come out in detector order, which is usually but not always reading order. Tables and marginalia are not modelled.
+- **CPU only.** ONNX Runtime exposes only `CPUExecutionProvider` on this machine, so no CUDA acceleration is available even though a capable GPU is installed.
+- **No language model post-correction.** 19th-century long-s, ligatures and archaic spelling survive into the index as recognised.
+- **Eight editions hold image or ZIP assets, not PDFs** (5 JPEG, 3 PNG, 1 ZIP across 8 editions). The PDF pipeline cannot ingest them; they need an image-ingestion path that does not yet exist.
 
 No accuracy figure (CER/WER) is claimed because none was measured.
 

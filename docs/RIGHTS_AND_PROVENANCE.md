@@ -9,11 +9,19 @@ Operations are independent permissions: acquire, store, OCR/transcribe, local or
 processing, display, and redistribute. Unknown, restricted, and permission-required statuses deny
 processing by default. A grant identifies permitted operations and links to evidence where available.
 
+PDF rendering creates a derivative page image and is therefore gated by the recorded STORE
+permission. pdf-inspect reads metadata and page count locally but does not persist page images.
+Encrypted PDFs are not processed through implicit password guessing or password collection.
+
 ## Provenance requirements
 Every derived artifact retains source work and edition identifier; page and optional normalized
-region; original artifact SHA-256; processor/model name and exact version; prompt/template and
-configuration hash; timestamp and pipeline run identifier; raw and normalized output; review state;
-confidence and alternate readings where meaningful.
+region; original artifact SHA-256; processor identity and exact version; configuration hash;
+timestamp and pipeline run identifier; raw and normalized output; review state; confidence and
+alternate readings where meaningful.
+
+The PDF renderer currently records source PDF SHA-256, rendered PNG SHA-256, one-based page number,
+PDF page label, source page dimensions, raster dimensions, and DPI. It does not yet persist a
+transactional page manifest or a full processing-run record; that is a subsequent milestone.
 
 ## Epistemic labels
 - Transcription: proposed reading of visible glyphs.
@@ -27,6 +35,6 @@ dataset. Similarity is a retrieval signal, not evidence of historical transmissi
 multiple model agents does not independently verify a claim.
 
 ## Source acquisition
-The initial importer accepts reviewed JSON Lines manifests only. Automated web acquisition is
-excluded from this release. Before enabling a connector, verify site terms, robots directives,
-rate limits, source rights, and whether page-level downloads are permitted.
+The importer accepts reviewed JSON Lines manifests only. Automated web acquisition is excluded
+from this release. Before enabling a connector, verify site terms, robots directives, rate limits,
+source rights, and whether page-level downloads are permitted.

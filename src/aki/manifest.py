@@ -15,10 +15,14 @@ def read_manifest(path: str | Path) -> Iterator[SourceRecord]:
                 continue
             try:
                 item = json.loads(line)
+                if not isinstance(item, dict):
+                    raise ValueError("each manifest line must be a JSON object")
                 missing = _REQUIRED - item.keys()
                 if missing:
                     raise ValueError(f"missing fields: {', '.join(sorted(missing))}")
                 rights_data = item["rights"]
+                if not isinstance(rights_data, dict):
+                    raise ValueError("rights must be a JSON object")
                 grant = RightsGrant(
                     status=RightsStatus(rights_data["status"]),
                     permitted_operations=frozenset(
@@ -33,5 +37,5 @@ def read_manifest(path: str | Path) -> Iterator[SourceRecord]:
                     language=item.get("language"), source_uri=item["source_uri"],
                     collection=item["collection"], edition_label=item["edition_label"], rights=grant,
                 )
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError) as exc:
                 raise ValueError(f"{path}:{number}: {exc}") from exc

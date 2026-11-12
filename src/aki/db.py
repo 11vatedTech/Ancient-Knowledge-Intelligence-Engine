@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def utcnow() -> str:
@@ -40,6 +40,7 @@ class Migration:
     version: int
     name: str
     sql: str
+    requires_foreign_keys_off: bool = False
 
 
 # --------------------------------------------------------------------------------------
@@ -446,7 +447,59 @@ SELECT
     (SELECT COUNT(*) FROM jobs WHERE state IN ('queued','retry_wait')) AS jobs_pending;
 """
 
-MIGRATIONS: tuple[Migration, ...] = (Migration(1, "canonical_schema_baseline", _M1),)
+# Migration 2 — the same bytes may legitimately back more than one edition.
+# ``storage_key`` is a content-addressed vault path, not a per-edition identity, so a
+# UNIQUE constraint on it wrongly rejects correct deduplication across editions.
+_M2 = """
+DROP VIEW IF EXISTS v_coverage;
+DROP TABLE IF EXISTS assets_v2;
+CREATE TABLE assets_v2 (
+    id TEXT PRIMARY KEY,
+    edition_id TEXT NOT NULL REFERENCES editions(id) ON DELETE RESTRICT,
+    rights_decision_id TEXT NOT NULL REFERENCES rights_decisions(id) ON DELETE RESTRICT,
+    source_url TEXT,
+    storage_key TEXT NOT NULL,
+    sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+    byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+    detected_mime TEXT NOT NULL,
+    original_filename TEXT,
+    asset_role TEXT NOT NULL CHECK (asset_role IN
+        ('original_scan','supplement','cover','page_image','derivative','permission_document')),
+    acquired_at TEXT,
+    immutable INTEGER NOT NULL DEFAULT 1 CHECK (immutable IN (0, 1)),
+    preflight_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (preflight_status IN ('pending','passed','quarantined','rejected')),
+    preflight_report TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    UNIQUE (edition_id, sha256, asset_role)
+);
+INSERT INTO assets_v2 SELECT id, edition_id, rights_decision_id, source_url, storage_key,
+    sha256, byte_size, detected_mime, original_filename, asset_role, acquired_at, immutable,
+    preflight_status, preflight_report, created_at FROM assets;
+DROP TABLE assets;
+ALTER TABLE assets_v2 RENAME TO assets;
+CREATE INDEX ix_assets_edition ON assets (edition_id);
+CREATE INDEX ix_assets_sha256 ON assets (sha256);
+CREATE INDEX ix_assets_storage_key ON assets (storage_key);
+CREATE VIEW v_coverage AS
+SELECT
+    (SELECT COUNT(*) FROM source_records) AS source_records,
+    (SELECT COUNT(*) FROM works) AS works,
+    (SELECT COUNT(*) FROM editions) AS editions,
+    (SELECT COUNT(*) FROM assets) AS assets,
+    (SELECT COUNT(*) FROM assets WHERE preflight_status = 'passed') AS assets_verified,
+    (SELECT COUNT(*) FROM pages) AS pages,
+    (SELECT COUNT(*) FROM pages WHERE processing_state = 'completed') AS pages_completed,
+    (SELECT COUNT(*) FROM transcriptions) AS transcriptions,
+    (SELECT COUNT(*) FROM evidence) AS evidence,
+    (SELECT COUNT(*) FROM claims) AS claims,
+    (SELECT COUNT(*) FROM jobs WHERE state IN ('queued','retry_wait')) AS jobs_pending;
+"""
+
+MIGRATIONS: tuple[Migration, ...] = (
+    Migration(1, "canonical_schema_baseline", _M1),
+    Migration(2, "shared_content_objects_across_editions", _M2, requires_foreign_keys_off=True),
+)
 
 
 class SchemaError(RuntimeError):
@@ -533,6 +586,8 @@ class Database:
                 # executescript implicitly commits, so the transaction lives inside the script
                 # itself: the DDL and its bookkeeping row commit together or not at all.
                 script = f"BEGIN IMMEDIATE;\n{migration.sql}\n{record}\nCOMMIT;"
+                if migration.requires_foreign_keys_off:
+                    connection.execute("PRAGMA foreign_keys = OFF")
                 try:
                     connection.executescript(script)
                 except Exception:
@@ -541,6 +596,16 @@ class Database:
                     except sqlite3.Error:
                         pass
                     raise
+                finally:
+                    if migration.requires_foreign_keys_off:
+                        connection.execute("PRAGMA foreign_keys = ON")
+                if migration.requires_foreign_keys_off:
+                    violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+                    if violations:
+                        raise SchemaError(
+                            f"migration {migration.version} left {len(violations)} "
+                            "foreign-key violations"
+                        )
                 applied.append(migration.version)
         return applied
 

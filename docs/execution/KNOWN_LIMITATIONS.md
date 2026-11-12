@@ -4,17 +4,21 @@ Every item here is a capability that does **not** exist or is **not** proven. No
 
 ---
 
-## 1. Corpus: 0 of 257 records acquired
+## 1. Corpus acquired but not readable
 
-All 257 discovered records are catalogued with rights state `review_required` and no permitted operations. No file was downloaded.
+All 257 catalogued editions now hold an archived, SHA-256-verified asset (2.84 GiB). Acquisition is complete.
 
-Reason: the source publishes no licence, no terms, and no public-domain statement, and every listed PDF is a modern digital edition with rights independent of the underlying work's age. Technically the object storage URLs are unauthenticated, which makes acquisition *possible* but not *permitted*.
+**But acquisition is not research readiness.** 0 of 257 editions have been rendered into pages, 0 have been transcribed, and 0 are indexed. The corpus is bytes on disk, not searchable evidence. The only indexed text in the system is a 3-page synthetic fixture.
 
-Consequence: no OCR, visual analysis, or historical research over the target corpus has been performed. Any claim otherwise would be false.
+Root cause: there is no OCR layer (§2), and no batch render/ingest pass has been run over the corpus. Until both happen, a research query over this corpus returns nothing, correctly and visibly.
 
-## 2. No OCR or HTR
+Rights basis is a **self-attestation** by the claimant, not an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
+
+## 2. No OCR or HTR — the blocking gap
 
 There is no OCR engine. The only text ingestion path is the PDF's embedded text layer (PyMuPDF). Scanned image-only PDFs produce pages and page images but **no text**, and therefore no searchable evidence.
+
+Most of the acquired corpus is scanned material, so this is the single largest functional gap in the platform: 257 archived editions cannot be read by the engine.
 
 No accuracy figure (CER/WER) is claimed because none was measured.
 

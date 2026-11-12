@@ -94,6 +94,38 @@ Architecture decision records for this implementation pass. Each records context
 
 ---
 
+## ADR-011 — Record the corpus permission as a labelled self-attestation
+
+**Context.** The source publishes no licence and no terms. The claimant stated in session that they are The Holy Word, a friend of [name withheld] and Joe Felz, and instructed acquisition.
+
+**Decision.** Record the grant, but record *what it is*: `docs/execution/PERMISSION_ATTESTATION.md` plus 257 `rights_decisions` rows naming the attester, the timestamp, the exact operations, and an explicit statement that no signed licence or independently verified instrument was supplied. Grant `cleared_limited`, not `cleared_full`; withhold export, redistribution, sharing, commercial use and fine-tuning.
+
+**Consequence.** The corpus can be archived and researched locally, and every byte acquired is attributable to a named person and a stated scope. The record does not launder an unverified claim into a verified one: the DB stores `license_name = "Self-attested permission"` and the notes field says verification is absent. If authority is contested, a superseding decision stops further processing and the archive remains auditable.
+
+**Rejected alternatives.** (a) Refusing to act on the rights holder's own statement — paternalistic and blocks the stated mission. (b) Recording it as a full clearance — overstates the evidence and would authorise redistribution on the strength of a chat message.
+
+---
+
+## ADR-012 — Remove `UNIQUE(storage_key)` from assets
+
+**Context.** Two acquisitions failed because identical bytes backed two editions. Content-addressed storage is *supposed* to deduplicate across editions; a uniqueness constraint on the vault path contradicts the storage model.
+
+**Decision.** Migration 2 rebuilds `assets` without that constraint, keeping `UNIQUE(edition_id, sha256, asset_role)` so a single edition cannot store the same object twice in the same role, and adds a non-unique index on `sha256` for cross-edition lookup.
+
+**Consequence.** One blob can legitimately back several editions with full provenance. Rebuilding a table in SQLite requires care: the migration drops the dependent `v_coverage` view first and recreates it afterwards, and is now restart-safe against a stale `assets_v2`. See `INCIDENT_REPAIR.md` for the failure that motivated that hardening.
+
+---
+
+## ADR-013 — Repair by replaying the migration's own DDL
+
+**Context.** A partially applied migration left `assets` dropped and its rows stranded in `assets_v2`, which was then lost.
+
+**Decision.** Rather than hand-writing CREATE TABLE, generate the v2 schema by running the real migration runner against a scratch database and apply the resulting DDL to the live database, then record the migration checksum computed by the same function. Repopulate rows from the acquisition run's machine-readable report, verifying blob existence and byte size per row before inserting.
+
+**Consequence.** No schema drift between a repaired database and a freshly migrated one. Recovery depended on an artefact (the run report) that happened to exist — this is disclosed as a weakness, not presented as a guarantee.
+
+---
+
 ## ADR-010 — No desktop application in this pass
 
 **Context.** Gates 6 requires a PySide6/QML shell. This environment is a terminal session; a desktop UI cannot be exercised or verified here.

@@ -31,7 +31,11 @@ OCR/HTR, layout segmentation, page regions, vision or visual-similarity analysis
 
 ## Catalog
 
-257 records were enumerated from The Holy Word's public catalog, imported idempotently, and each assigned one transparent disposition: `review_required` with **no permitted operations**. Zero files were acquired, because the source publishes no licence or permission statement. Catalogued is not acquired. See [`ACQUISITION_REPORT.md`](docs/execution/ACQUISITION_REPORT.md).
+All **257** records of The Holy Word's public catalog were enumerated, imported idempotently, and **acquired**: every edition holds an archived, SHA-256-verified asset — 2.84 GiB across PDF, EPUB-derived ZIP, PNG and JPEG, with zero outstanding failures and zero integrity violations.
+
+Acquisition ran under a **self-attested permission** recorded at [`docs/execution/PERMISSION_ATTESTATION.md`](docs/execution/PERMISSION_ATTESTATION.md), which states plainly that it is an assertion by the claimant rather than an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
+
+**Acquired is not readable.** None of the 257 editions has been rendered or transcribed yet, so the corpus is bytes on disk rather than searchable evidence — the OCR layer is the blocking gap. See [`ACQUISITION_REPORT.md`](docs/execution/ACQUISITION_REPORT.md) and [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md).
 
 ## Development
 

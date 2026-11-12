@@ -146,6 +146,37 @@ Budget max_concurrent_gpu_jobs=1, gpu_vram_headroom≈10.4 GB, cpu_workers=4
 
 ---
 
+### Corpus acquisition (batch, live)
+
+```
+$ aki acquire run --config .aki/holyword.json --log .aki/acquisition-progress.jsonl
+attempted: 255   succeeded: 253   failed: 2   bytes_stored: 2,998,683,774
+
+  ERR  Gospel of Mary Magdalene                UNIQUE constraint failed: assets.storage_key
+  ERR  threesevensasto00phelgoog              UNIQUE constraint failed: assets.storage_key
+
+# after migration 2 removed the bad constraint:
+$ aki acquire run --config .aki/holyword.json
+attempted: 2   succeeded: 2   failed: 0
+```
+
+Final acquisition state:
+
+```
+$ aki acquire status
+editions_with_archived_asset: 257   (of 257 catalogued)
+assets_total: 258
+bytes_total: 3,052,062,410
+by_media_type: pdf 249, jpeg 5, png 3, zip 1
+
+$ aki verify
+assets_checked: 256 (pre-final-two)
+assets_missing_or_corrupt: []
+quick_check: ok   foreign_key_violations: 0   schema_version: 2   ok: true
+```
+
+Migration 2 and the asset-table repair are documented in `INCIDENT_REPAIR.md`. The repair re-derived 256 asset rows from the run report, verifying each blob's on-disk size against the recorded size before insert; 0 errors.
+
 ## What is **not** tested
 
 - OCR / HTR accuracy — no engine installed, no labelled set, **no CER measured**

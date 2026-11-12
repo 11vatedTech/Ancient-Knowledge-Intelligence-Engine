@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from . import __version__
+from .acquire import acquire_catalog, acquisition_state
 from .blob_store import ContentAddressedStore
 from .catalog import SourceCatalog
 from .db import Database, initialize
@@ -118,6 +119,158 @@ def cmd_inventory_report(args: argparse.Namespace) -> int:
 def cmd_inventory_manifest(args: argparse.Namespace) -> int:
     _emit(export_manifest(_database(args), args.destination))
     return 0
+
+
+ATTESTATION_PATH = "docs/execution/PERMISSION_ATTESTATION.md"
+
+DEFAULT_ATTESTED_OPERATIONS = (
+    "acquire,store_original,render_pages,ocr_transcribe,vision_analyze,"
+    "create_embeddings,internal_search,internal_research"
+)
+
+
+def cmd_rights_attest(args: argparse.Namespace) -> int:
+    """Record a rights-holder permission as an explicit, labelled attestation.
+
+    The record states exactly what it is: an assertion by the party claiming authority,
+    captured with its timestamp and scope. It is not presented as an independently
+    verified licence, and the evidence pointer is the committed attestation document.
+    """
+    from .db import new_id, utcnow
+    from .production_domain import RightsDecisionState, RightsOperation
+
+    database = _database(args)
+    database.require_current()
+    operations = [item.strip() for item in args.operations.split(",") if item.strip()]
+    valid = {member.value for member in RightsOperation}
+    unknown = [op for op in operations if op not in valid]
+    if unknown:
+        raise SystemExit(f"unknown operations: {unknown}")
+    state = RightsDecisionState(args.state)
+    stamp = utcnow()
+
+    with database.connect() as connection:
+        edition_ids = [
+            row["id"]
+            for row in connection.execute(
+                "SELECT id FROM editions WHERE source_record_id IS NOT NULL ORDER BY id"
+            )
+        ]
+    if not edition_ids:
+        raise SystemExit("no catalogued editions to attest")
+
+    attestation_id = new_id()
+    scopes = ", ".join(operations)
+    notes = (
+        f"Self-attested permission. Attester claims to be the rights holder / operator of "
+        f"{args.source_name}. Asserted in an interactive session on {stamp}; no independent "
+        f"documentary verification (signed licence, domain-verified email, or written "
+        f"instrument) was supplied. Recorded at the account owner's instruction. "
+        f"Scope: {scopes}. Basis: {args.basis or 'not supplied'}."
+    )
+    document = [
+        "# Permission Attestation",
+        "",
+        f"**Attestation ID:** `{attestation_id}`",
+        f"**Recorded at:** {stamp}",
+        f"**Attester:** {args.reviewer}",
+        f"**Source:** {args.source_name}",
+        f"**State recorded:** `{state.value}`",
+        f"**Operations granted:** {scopes}",
+        f"**Basis offered:** {args.basis or '(none supplied)'}",
+        f"**Editions covered:** {len(edition_ids)}",
+        "",
+        "## Evidentiary status",
+        "",
+        "This document records an **assertion of authority made by the attester**. It is not a",
+        "signed licence, not a legal opinion, and not independently verified. It is retained so",
+        "that every acquisition performed under it is attributable to a specific person, at a",
+        "specific time, with a specific stated scope.",
+        "",
+        "If the attester's authority is later contested or narrowed, the appropriate response is",
+        "to record a superseding decision and stop further processing; existing archived bytes",
+        "remain auditable and can be quarantined without loss of provenance.",
+        "",
+        "## Scope limits that still apply",
+        "",
+        "- Permission for one operation does not imply another; check the list above.",
+        "- Fine-tuning and redistribution remain denied unless listed.",
+        "- Rights in the underlying historical work are separate from rights in this digital",
+        "  edition, scan, or compilation.",
+        "",
+    ]
+    attestation_file = Path(ATTESTATION_PATH).resolve()
+    attestation_file.write_text("\n".join(document), encoding="utf-8")
+    evidence_uri = attestation_file.as_uri()
+
+    inserted = 0
+    with database.transaction() as connection:
+        for edition_id in edition_ids:
+            connection.execute(
+                "INSERT INTO rights_decisions (id, edition_id, state, jurisdiction, rights_holder,"
+                " license_name, license_url, evidence_uri, reviewer, decided_at, scope, notes,"
+                " created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    new_id(), edition_id, state.value, args.jurisdiction, args.reviewer,
+                    args.basis or "Self-attested permission", None, evidence_uri,
+                    args.reviewer, stamp,
+                    json.dumps({"permitted_operations": operations}, sort_keys=True),
+                    notes, stamp,
+                ),
+            )
+            inserted += 1
+        connection.execute(
+            "INSERT INTO audit_events (id, occurred_at, actor_type, actor_id, action,"
+            " subject_type, subject_id, details) VALUES (?,?,?,?,?,?,?,?)",
+            (
+                new_id(), stamp, "human", args.reviewer, "rights.attestation_recorded",
+                "collection", args.source_name,
+                json.dumps(
+                    {
+                        "attestation_id": attestation_id,
+                        "state": state.value,
+                        "operations": operations,
+                        "editions": inserted,
+                        "document": ATTESTATION_PATH,
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+    _emit({
+        "attestation_id": attestation_id,
+        "document": str(attestation_file),
+        "editions_covered": inserted,
+        "state": state.value,
+        "permitted_operations": operations,
+        "evidentiary_status": "self-attested by claimant; not independently verified",
+    })
+    return 0
+
+
+def cmd_acquire(args: argparse.Namespace) -> int:
+    database = _database(args)
+    if args.action == "status":
+        _emit(acquisition_state(database))
+        return 0
+    config = CatalogConfig.load(args.config)
+    log_path = Path(args.log)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def progress(record: dict) -> None:
+        with log_path.open("a", encoding="utf-8") as sink:
+            sink.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    report = acquire_catalog(
+        database,
+        args.blob_root,
+        base_url=config.base_url,
+        limit=args.limit,
+        min_interval_seconds=args.min_interval,
+        progress=progress,
+    )
+    _emit(report.to_dict())
+    return 0 if report.failed == 0 else 1
 
 
 def cmd_rights_grant(args: argparse.Namespace) -> int:
@@ -403,6 +556,28 @@ def build_parser() -> argparse.ArgumentParser:
     rights_list = rights_sub.add_parser("list", help="list recent rights decisions")
     rights_list.add_argument("--limit", type=int, default=50)
     rights_list.set_defaults(func=cmd_rights_list)
+    attest = rights_sub.add_parser(
+        "attest", help="record a rights-holder permission statement for the collection"
+    )
+    attest.add_argument("--reviewer", required=True)
+    attest.add_argument("--source-name", default="The Holy Word (theholyword.net)")
+    attest.add_argument("--basis", default=None, help="stated basis for the grant")
+    attest.add_argument("--jurisdiction", default=None)
+    attest.add_argument("--state", default="cleared_limited",
+                        choices=["cleared_limited", "cleared_full"])
+    attest.add_argument("--operations", default=DEFAULT_ATTESTED_OPERATIONS)
+    attest.set_defaults(func=cmd_rights_attest)
+
+    acquire = sub.add_parser("acquire", help="batch acquisition of catalogued objects")
+    acquire_sub = acquire.add_subparsers(dest="action", required=True)
+    acquire_run = acquire_sub.add_parser("run", help="download rights-cleared objects")
+    acquire_run.add_argument("--config", required=True)
+    acquire_run.add_argument("--limit", type=int, default=None)
+    acquire_run.add_argument("--min-interval", type=float, default=1.0)
+    acquire_run.add_argument("--log", default=".aki/acquisition-progress.jsonl")
+    acquire_run.set_defaults(func=cmd_acquire)
+    acquire_status = acquire_sub.add_parser("status", help="acquisition coverage")
+    acquire_status.set_defaults(func=cmd_acquire)
 
     cat_import = sub.add_parser("catalog-import", help="import a reviewed JSONL manifest")
     cat_import.add_argument("manifest")

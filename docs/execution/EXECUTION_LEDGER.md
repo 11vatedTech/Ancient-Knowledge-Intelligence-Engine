@@ -65,13 +65,14 @@
 | Advertised by the source site | 257 |
 | Unique works | 257 |
 | Unique editions | 257 |
-| Assets acquired | 0 |
-| Assets verified (preflight + SHA-256) | 0 |
-| Rights `review_required` | 257 |
-| Rights cleared | 0 |
-| Bytes stored | 0 |
+| **Editions with an archived, hash-verified asset** | **257 / 257** |
+| Total assets (incl. 1 synthetic fixture) | 258 |
+| Assets verified (preflight + SHA-256) | 258 |
+| Failed acquisitions outstanding | 0 |
+| Rights basis | self-attested permission, `cleared_limited`, 257 rows |
+| Bytes stored | 3,052,062,410 (2.84 GiB) |
 
-Every discovered record has exactly one disposition. None is represented as acquired.
+Every discovered record has exactly one disposition, and every one is now acquired and integrity-verified. Acquisition is **not** research readiness: 0 of 257 have been rendered or transcribed, because no OCR layer exists yet.
 
 ---
 
@@ -95,16 +96,16 @@ Its code was verified locally by this pass: the inherited test suite passes unmo
 
 ## Outstanding external approvals
 
-1. **Corpus rights.** 257 records are catalogued and held. Acquisition requires the owner (or The Holy Word's operator) to record an operation-scoped permission. Until then `aki ingest` fails closed for every one of them. See `ACQUISITION_REPORT.md` §"What is needed to proceed".
+1. **Corpus rights — partially closed.** Authority was self-attested in session and recorded in `docs/execution/PERMISSION_ATTESTATION.md`. Acquisition and internal research are permitted on that basis. Still denied: export, redistribution, third-party sharing, commercial use, and fine-tuning. Independent documentary verification remains outstanding if the corpus is ever to leave this machine.
 2. **Model downloads.** Installing an OCR or vision model is a multi-GB download with licence implications. Not performed. `aki doctor` reports the measured VRAM budget (1 concurrent GPU job, ~10.4 GB headroom).
 
 ---
 
 ## Next executable action
 
-1. Obtain a written licence or permission statement covering the intended operations for a subset of the 257 catalogued works, then record it with `aki rights grant`.
-2. Alternatively, supply an owned public-domain PDF and clear it for `store_original, render_pages, ocr_transcribe, internal_search, internal_research` — the pipeline is already proven and will ingest it immediately.
-3. Then run OCR/HTR integration (needs an approved model install) to move Gate 2 from *pipeline-proven* to *document-intelligence-complete*.
+1. **Implement the OCR layer.** This is the single highest-value next step: the corpus is on disk and hash-verified but unreadable to the engine. Rendering + OCR + evidence indexing would convert 257 archived PDFs into a searchable, citable corpus. Blocked only on choosing and installing a local OCR engine.
+2. Batch-render pages for all 257 editions and run ingestion, so coverage counters leave zero.
+3. Obtain independent documentary verification of the corpus permission if the material is ever to be exported or shared.
 
 ---
 

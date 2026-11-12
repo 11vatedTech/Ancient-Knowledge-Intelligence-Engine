@@ -19,7 +19,7 @@ def database(tmp_path):
 def test_migration_is_idempotent(database):
     report = initialize(database.path)
     assert report["applied"] == []
-    assert report["version_after"] == 1
+    assert report["version_after"] == 2
     assert database.integrity_check()["quick_check"] == "ok"
 
 

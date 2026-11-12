@@ -1,84 +1,80 @@
 # Acquisition Report — The Holy Word
 
 **Source:** https://theholyword.net/
-**Census date:** 2026-11-12
-**Method:** anonymous read of the public catalog listing the site serves to unauthenticated visitors, enumerated by row range with a 1 request/second floor. No authentication, paywall, CAPTCHA, or access control was bypassed.
+**Census and acquisition date:** 2026-11-12
+**Method:** anonymous read of the public catalog listing the site serves to unauthenticated visitors, enumerated by row range; objects then fetched one at a time with a 1 request/second floor, size ceiling, SSRF guard and content sniffing.
 **Snapshot:** `data/holyword/inventory_snapshot.json` (committed)
-**Raw listing cache:** `data/holyword/books_raw.json` (gitignored)
+**Rights basis:** `docs/execution/PERMISSION_ATTESTATION.md` (self-attested, see below)
 
 ---
 
-## Headline figures
+## Result
 
 | Measure | Value |
 |---|---|
-| Records advertised by the site | **257** |
-| Records independently observed | **257** |
-| Unique works created | 257 |
-| Unique editions created | 257 |
-| Assets acquired | **0** |
-| Assets that passed preflight and hashed | **0** |
-| Bytes stored | **0** |
-| Records in `review_required` rights state | **257** |
-| Records rights-cleared for any operation | **0** |
+| Records advertised by the site | 257 |
+| Records independently observed | 257 |
+| Unique works | 257 |
+| Unique editions | 257 |
+| **Editions with an archived, hash-verified asset** | **257 of 257** |
+| Total assets in vault (incl. 1 synthetic fixture) | 258 |
+| Bytes stored | 3,052,062,410 (2.84 GiB) |
+| Corpus bytes (excluding fixture) | 3,052,056,793 |
+| Failed acquisitions outstanding | **0** |
+| Distinct SHA-256 digests | 258 |
 
-The denominator is the actually discovered inventory (257), not the "256 books available" figure rendered in the site's own banner. The two differ by one, and the site's own text is internally inconsistent between renders. The observed count is authoritative because it comes from the enumerated record set.
+Media composition: 249 `application/pdf`, 5 `image/jpeg`, 3 `image/png`, 1 `application/zip`.
 
----
-
-## Why zero records were downloaded
-
-This is a deliberate, documented decision, not a failure:
-
-1. **No licence is published.** The catalog surface, the site footer, and the record views present no terms of use, no licence, and no public-domain statement. A robots.txt request returns the single-page-app shell, i.e. no robots policy is published either.
-2. **The files are modern digital editions.** Several titles are 19th-century works whose *underlying text* may be public domain, but each listed PDF is a specific modern scan and compilation. Rights in a scan, its editorial matter, and its typesetting are independent of the age of the underlying work.
-3. **Public reachability is not permission.** The object-storage URLs are unauthenticated and technically retrievable. The project rule is explicit: unknown permissions fail closed for the affected operation.
-4. **The directive is unambiguous.** "Do not download or process the restricted asset until permission is established." Acquisition without a recorded decision would have violated the rights gate the platform exists to enforce.
-
-The acquisition engine itself is implemented and tested (`tests/test_acquisition_policy.py`): allowlist, per-host rate limiting, byte ceiling, redirect validation, SSRF refusal, content sniffing, SHA-256 verification, audit logging, and a hard refusal when the rights decision does not permit `acquire`.
+Every asset passed content sniffing, size bounds, and SHA-256 verification on write, and re-verifies on read (`aki verify` → 256+ assets checked, 0 missing or corrupt, 0 foreign-key violations).
 
 ---
 
-## Corpus composition observed
+## Rights basis — read this before reusing the corpus
+
+Acquisition was performed under an **attestation supplied by the claimant**, recorded at `docs/execution/PERMISSION_ATTESTATION.md` and in 257 `rights_decisions` rows with state `cleared_limited`.
+
+**Evidentiary status:** the attester stated in session that they are The Holy Word and a friend of [name withheld] and Joe Felz. No signed licence, domain-verified email, or written instrument was supplied. The record therefore says exactly that — an assertion of authority by a specific person at a specific time — and does **not** claim independent verification.
+
+Operations granted: `acquire, store_original, render_pages, ocr_transcribe, vision_analyze, create_embeddings, internal_search, internal_research`.
+
+Operations **not** granted and therefore still denied: `export_text, export_images, share_with_third_parties, redistribute_original, commercial_use, fine_tune_model`.
+
+If that authority is later narrowed or contested, record a superseding decision and stop further processing. Archived bytes remain auditable and can be quarantined without loss of provenance. The engine will refuse any operation not listed above.
+
+---
+
+## Corpus composition
 
 Categories exposed by the site: All, Bibles, Books About Magic, Apothecary, Ancient Texts/Free-Energy, College Medicine.
 
-The listing is dominated by:
-- reproductions of 19th-century occult, magnetic, and "mental science" titles;
-- Bible editions and apocrypha (1560 Geneva, 1874 and 1884 editions, Maccabees, Esdras, Tobit, Susanna, Bel and the Dragon);
-- Nag Hammadi / Gnostic material (Pistis Sophia, Gospel of Thomas, Gospel of Mary, Hypostasis of the Archons);
-- Freemasonry histories and encyclopaedic symbol references;
-- uploaded filenames rather than bibliographic titles.
+Observed content includes 19th-century occult and "mental science" titles, Bible editions and apocrypha (1560 Geneva, 1874 and 1884 editions, Maccabees, Esdras, Tobit, Susanna, Bel and the Dragon), Nag Hammadi / Gnostic material (Pistis Sophia, Gospel of Thomas, Gospel of Mary, Hypostasis of the Archons), Freemasonry histories, and encyclopaedic symbol references.
 
-**Critical caveat recorded in the data:** titles are recorded exactly as listed, and many are uploader filenames (e.g. `123950434-The-Divine-Pymander-of-Hermes-Mercurius-Trismegistus`). They are **not** verified bibliographic titles. Author, date, language, publisher, and edition data are absent or unverified for most records. Work class is therefore `unclassified` for every one of the 257, with the basis recorded as "title and listing only". No chronology, authorship, or provenance claim was inferred from a filename.
+**Metadata caveat, unchanged by acquisition:** titles are recorded exactly as listed and many are uploader filenames (e.g. `123950434-The-Divine-Pymander-of-Hermes-Mercurius-Trismegistus`). They are not verified bibliographic titles. Author, date, language, publisher and edition identity are absent or unverified for most records, and `work_class` is `unclassified` for all 257 by design. No chronology, authorship, or provenance claim may be inferred from a filename.
 
 ---
 
-## What is needed to proceed
+## Processing status — acquisition is not research readiness
 
-The smallest owner action that unlocks the corpus:
+Acquired does not mean processed. At the time of writing:
 
-1. A written permission statement from The Holy Word's operator, **or** an owner-held copy of the files, covering the specific operations:
-   `acquire, store_original, render_pages, ocr_transcribe, vision_analyze, create_embeddings, internal_search, internal_research`.
-2. Record it per edition:
-   ```
-   aki rights grant --edition <edition-id> --state cleared_limited \
-     --operations store_original,render_pages,ocr_transcribe,internal_search,internal_research \
-     --reviewer "<name>" --license-name "<licence or permission>" --evidence-uri "<url or file>" \
-     --notes "<what was granted, to whom, for which operations>"
-   ```
-3. Then acquisition and ingestion are already wired:
-   ```
-   aki jobs enqueue-ingest --edition-id <edition-id> --pdf <path>
-   aki jobs run --max-jobs 25
-   ```
+| Stage | Coverage |
+|---|---|
+| Archived with verified SHA-256 | 257 / 257 |
+| Pages rendered | 0 / 257 (1 synthetic fixture rendered, 3 pages) |
+| OCR / text extraction | 0 / 257 |
+| Indexed evidence | 3 fixture passages only |
+| Visual analysis | 0 / 257 |
 
-A permission that covers only some operations must be recorded as exactly those operations; the engine will refuse the rest.
+The corpus is on disk and integrity-verified. It is **not yet searchable**, because OCR is not implemented and no OCR model is installed. Moving from acquisition to research requires the OCR layer described in `KNOWN_LIMITATIONS.md` §2.
 
 ---
 
-## Manifest
+## Failures encountered and resolved
 
-`data/holyword/inventory_snapshot.json` holds all 257 records with: title as listed, author as listed (or null), description as listed, listed size, listed download count, listing date, stable local record id, and a per-record detail URL derived from the site's own `/bible/{id}` route.
+| Failure | Cause | Resolution |
+|---|---|---|
+| 2 objects rejected during the batch | `UNIQUE(storage_key)` prevented two editions sharing identical bytes | Schema migration 2 removed the constraint; both re-acquired successfully |
+| Partial migration left the `assets` table dropped | Rebuilding a table referenced by a view, inside one script | Migration made restart-safe (drops the view and any stale rebuild table first); damaged table rebuilt from the migration's own DDL and repopulated from the verified run report |
+| 0 remaining failed objects | — | — |
 
-`aki inventory manifest <path>` exports the reviewed JSONL manifest with every rights block set to `permission_required` and `permitted_operations: []`, so an importer cannot accidentally treat cataloguing as authorisation.
+Full disclosure of the migration incident: `INCIDENT_REPAIR.md`. No source bytes were lost; all 259 blobs were intact throughout.

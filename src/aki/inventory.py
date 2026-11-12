@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .db import Database, utcnow
+from .db import Database, new_id, utcnow
 
 _TITLE_NOISE = re.compile(r"[^\w\s]", re.UNICODE)
 
@@ -42,6 +42,9 @@ class ListingItem:
     size_label: str | None = None
     downloads: int | None = None
     detail_url: str | None = None
+    storage_path: str | None = None
+    media_type: str | None = None
+    declared_size: int | None = None
 
     def __post_init__(self) -> None:
         if not self.title.strip():
@@ -72,6 +75,9 @@ class InventorySnapshot:
                 size_label=item.get("size_label"),
                 downloads=item.get("downloads"),
                 detail_url=item.get("detail_url"),
+                storage_path=item.get("storage_path"),
+                media_type=item.get("media_type"),
+                declared_size=item.get("declared_size"),
             )
             for item in payload.get("items", [])
         )
@@ -107,6 +113,7 @@ class ImportReport:
     duplicates_in_snapshot: int
     advertised_count: int | None
     observed_count: int
+    metadata_updated: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -131,6 +138,7 @@ def import_snapshot(
     items = snapshot.deduplicated()
     duplicates = len(snapshot.items) - len(items)
     added = existing = works_added = works_existing = editions_added = rights_added = 0
+    metadata_updated = 0
     now = utcnow()
 
     with database.transaction() as connection:
@@ -138,8 +146,20 @@ def import_snapshot(
             record_key = stable_key(name, normalize_title(item.title), (item.author or "").casefold())
             record_id = f"src-{record_key}"
             record_url = item.detail_url or f"{snapshot.site_url.rstrip('/')}/#record-{record_key}"
+            metadata = {
+                "author_as_listed": item.author,
+                "description_as_listed": item.description,
+                "published_label": item.published_label,
+                "size_label": item.size_label,
+                "downloads_as_listed": item.downloads,
+                "page_count_observed": snapshot.observed_pages,
+                "storage_path": item.storage_path,
+                "media_type": item.media_type,
+                "declared_size": item.declared_size,
+            }
+            metadata_json = json.dumps(metadata, sort_keys=True)
             record = connection.execute(
-                "SELECT id FROM source_records WHERE source_name=? AND record_url=?",
+                "SELECT id, metadata FROM source_records WHERE source_name=? AND record_url=?",
                 (name, record_url),
             ).fetchone()
             if record is None:
@@ -149,25 +169,31 @@ def import_snapshot(
                     " created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (
                         record_id, name, record_url, item.title, "[]", now,
-                        snapshot.discovery_method, "metadata_captured",
-                        json.dumps(
-                            {
-                                "author_as_listed": item.author,
-                                "description_as_listed": item.description,
-                                "published_label": item.published_label,
-                                "size_label": item.size_label,
-                                "downloads_as_listed": item.downloads,
-                                "page_count_observed": snapshot.observed_pages,
-                            },
-                            sort_keys=True,
-                        ),
-                        now,
+                        snapshot.discovery_method, "metadata_captured", metadata_json, now,
                     ),
                 )
                 added += 1
             else:
                 existing += 1
-                record_id = record_id if record["id"] == record_id else record["id"]
+                record_id = record["id"]
+                if record["metadata"] != metadata_json:
+                    connection.execute(
+                        "UPDATE source_records SET metadata=?, display_title=? WHERE id=?",
+                        (metadata_json, item.title, record_id),
+                    )
+                    connection.execute(
+                        "INSERT INTO audit_events (id, occurred_at, actor_type, actor_id, action,"
+                        " subject_type, subject_id, before_hash, after_hash, details)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            new_id(), utcnow(), "service", "inventory",
+                            "source_record.metadata_updated", "source_record", record_id,
+                            hashlib.sha256(record["metadata"].encode()).hexdigest(),
+                            hashlib.sha256(metadata_json.encode()).hexdigest(),
+                            json.dumps({"source_name": name}, sort_keys=True),
+                        ),
+                    )
+                    metadata_updated += 1
 
             work_key = stable_key("work", normalize_title(item.title), (item.author or "").casefold())
             work_id = f"wrk-{work_key}"
@@ -234,6 +260,7 @@ def import_snapshot(
         editions_added=editions_added,
         rights_decisions_added=rights_added,
         duplicates_in_snapshot=duplicates,
+        metadata_updated=metadata_updated,
         advertised_count=snapshot.advertised_count,
         observed_count=len(items),
     )
@@ -462,6 +489,9 @@ def fetch_catalog(
                 size_label=(f"{int(size)} bytes" if isinstance(size, int) else None),
                 downloads=(row.get("download_count") if isinstance(row.get("download_count"), int) else None),
                 detail_url=f"{site_url.rstrip('/')}/bible/{identifier}",
+                storage_path=(row.get("file_path") or None),
+                media_type=(row.get("file_type") or None),
+                declared_size=(row.get("file_size") if isinstance(row.get("file_size"), int) else None),
             )
         offset += len(payload)
         if len(records) >= max_records:

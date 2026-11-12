@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable, Iterator
 
 from .blob_store import ContentAddressedStore
 from .pdf import RenderedPage
@@ -43,7 +44,8 @@ class PageArtifactCatalog:
                 )
             """)
 
-    def _connect(self):
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.database, timeout=15)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON")

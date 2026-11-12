@@ -5,14 +5,16 @@
 - [x] Make catalog insertion idempotent and reject stable-ID collisions.
 - [ ] Reconcile the nominated 256-work collection against the live source catalog.
 - [ ] Record edition-level rights evidence before bulk acquisition.
-- [ ] Add CI, security scanning, coverage enforcement, and release metadata.
+- [x] Add a GitHub Actions quality workflow; resolve and verify the first green run.
+- [ ] Add security scanning, coverage enforcement, and release metadata.
 
 ## Stage 1 — Archival ingestion
-- [ ] Source adapters with terms, robots, rate-limit, and permission handling.
-- [ ] Preserve original bytes with SHA-256 identity; never overwrite source assets.
-- [ ] Deterministic page extraction and source-to-page mapping.
-- [ ] Resumable jobs, retry budgets, leases, and audit events.
-- [ ] Artifact reopening and hash verification.
+- [x] Preserve original bytes in a SHA-256 content-addressed blob store.
+- [x] Inspect local PDFs, capture source hashes and metadata, and enforce page-count limits.
+- [x] Render deterministic page PNG artifacts with page labels, dimensions, DPI, and source-to-page provenance.
+- [ ] Persist page manifests transactionally and make ingestion resumable across process interruption.
+- [ ] Add source adapters with terms, robots, rate-limit, and permission handling.
+- [ ] Add job leases, retry budgets, audit events, and artifact reopening/hash verification.
 
 ## Stage 2 — Multimodal document intelligence
 - [ ] PDF structure, page segmentation, and region coordinates.

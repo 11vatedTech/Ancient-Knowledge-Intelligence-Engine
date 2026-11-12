@@ -64,6 +64,6 @@ PDF page images are stored as immutable PNG blobs under .aki/blobs/sha256/. Do n
 - **Uncertainty is data:** confidence, review state, alternative readings, and contradictions are preserved.
 - **No silent source mutation:** source files are content-addressed and never overwritten in place.
 
-See docs/ROADMAP.md, docs/ARCHITECTURE.md, and docs/RIGHTS_AND_PROVENANCE.md.
+See docs/ROADMAP.md, docs/ARCHITECTURE.md, docs/RIGHTS_AND_PROVENANCE.md, and [the local development handoff](docs/LOCAL_DEVELOPMENT_HANDOFF.md).
 
 AKI is a research and archival tool, not an authority that settles historical disputes. Similar motifs, words, or cosmological descriptions do not by themselves establish contact, borrowing, or shared origin.

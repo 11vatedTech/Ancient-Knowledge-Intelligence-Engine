@@ -37,6 +37,9 @@ class RenderedPage:
     page_height_points: float
     dpi: int
     blob_path: str
+    renderer_name: str
+    renderer_version: str
+    config_sha256: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -124,6 +127,9 @@ class PDFPageProcessor:
         inspection = self.inspect(path)
         pymupdf = self._pymupdf()
         rendered: list[RenderedPage] = []
+        config_sha256 = hashlib.sha256(
+            f"dpi={dpi};colorspace=RGB;alpha=false;annots=true;format=PNG".encode("utf-8")
+        ).hexdigest()
         try:
             with pymupdf.open(str(path)) as document:
                 for index in range(document.page_count):
@@ -156,9 +162,15 @@ class PDFPageProcessor:
                         page_height_points=height_points,
                         dpi=dpi,
                         blob_path=str(blob.path),
+                        renderer_name="PyMuPDF",
+                        renderer_version=str(pymupdf.VersionBind),
+                        config_sha256=config_sha256,
                     ))
         except PDFProcessingError:
             raise
         except Exception as exc:
             raise PDFProcessingError(f"Unable to render PDF pages: {exc}") from exc
+        final_inspection = self.inspect(path)
+        if final_inspection.source_pdf_sha256 != inspection.source_pdf_sha256:
+            raise PDFProcessingError("PDF content changed during rendering; rendered pages were not manifested.")
         return rendered

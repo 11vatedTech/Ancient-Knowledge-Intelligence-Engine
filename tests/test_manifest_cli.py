@@ -2,6 +2,7 @@ import json
 import pytest
 from aki.cli import main
 from aki.manifest import read_manifest
+from aki.domain import ProcessingOperation
 
 
 def manifest_line():
@@ -25,13 +26,20 @@ def test_manifest_reads_explicit_rights_and_metadata(tmp_path):
     records = list(read_manifest(path))
     assert len(records) == 1
     assert records[0].title == "Example Work"
-    assert records[0].rights.permits(__import__("aki.domain", fromlist=["ProcessingOperation"]).ProcessingOperation.OCR)
+    assert records[0].rights.permits(ProcessingOperation.OCR)
 
 
 def test_manifest_reports_line_number_for_invalid_record(tmp_path):
     path = tmp_path / "invalid.jsonl"
     path.write_text('{"title": "incomplete"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match=r"invalid.jsonl:1"):
+        list(read_manifest(path))
+
+
+def test_manifest_rejects_non_object_json(tmp_path):
+    path = tmp_path / "array.jsonl"
+    path.write_text('[]\\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="JSON object"):
         list(read_manifest(path))
 
 

@@ -378,24 +378,55 @@ def _pdf_page_count(path: Path) -> int | None:
         return None
 
 
-def _purge_derived(database: Database, asset_id: str) -> None:
+PURGE_BATCH_PAGES = 200
+
+
+def _purge_derived(database: Database, asset_id: str, *, attempts: int = 6) -> None:
     """Remove derived rows for an incompletely rendered asset so it can be redone.
 
     Only derived data is touched: pages, transcriptions, evidence and index rows. The
     archived original is immutable and is never deleted here.
+
+    Deletion is batched. A 400-page document purged in one transaction holds the write
+    lock long enough for concurrent workers to fail with ``database is locked``, which is
+    how the first repair attempt actually failed; small transactions plus a bounded retry
+    keep the lock window short.
     """
-    in_pages = "(SELECT id FROM pages WHERE asset_id=?)"
-    with database.transaction() as connection:
-        connection.execute(
-            f"DELETE FROM chunks_fts WHERE chunk_id IN"
-            f" (SELECT id FROM chunk_records WHERE page_id IN {in_pages})",
-            (asset_id,),
-        )
-        connection.execute(
-            f"DELETE FROM chunk_records WHERE page_id IN {in_pages}", (asset_id,)
-        )
-        connection.execute(f"DELETE FROM evidence WHERE page_id IN {in_pages}", (asset_id,))
-        connection.execute("DELETE FROM pages WHERE asset_id=?", (asset_id,))
+    import sqlite3
+    import time
+
+    for attempt in range(attempts):
+        try:
+            _purge_derived_batched(database, asset_id)
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == attempts - 1:
+                raise
+            time.sleep(2.0 * (attempt + 1))
+
+
+def _purge_derived_batched(database: Database, asset_id: str) -> None:
+    while True:
+        with database.transaction() as connection:
+            page_ids = [
+                row[0] for row in connection.execute(
+                    "SELECT id FROM pages WHERE asset_id=? LIMIT ?",
+                    (asset_id, PURGE_BATCH_PAGES),
+                )
+            ]
+            if not page_ids:
+                return
+            marks = ",".join("?" * len(page_ids))
+            connection.execute(
+                "DELETE FROM chunks_fts WHERE chunk_id IN"
+                f" (SELECT id FROM chunk_records WHERE page_id IN ({marks}))",
+                page_ids,
+            )
+            connection.execute(
+                f"DELETE FROM chunk_records WHERE page_id IN ({marks})", page_ids
+            )
+            connection.execute(f"DELETE FROM evidence WHERE page_id IN ({marks})", page_ids)
+            connection.execute(f"DELETE FROM pages WHERE id IN ({marks})", page_ids)
 
 
 def _pymupdf_version() -> str:

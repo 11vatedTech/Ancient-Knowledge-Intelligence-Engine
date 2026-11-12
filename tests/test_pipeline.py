@@ -133,6 +133,32 @@ def test_vault_keys_are_portable(seeded):
     assert asset["storage_key"].startswith("sha256/")
 
 
+def test_reingest_repairs_an_interrupted_render(seeded):
+    """A worker killed mid-document must not strand the edition forever."""
+    database, pdf, blobs = seeded
+    _grant(database)
+    first = ingest_pdf(database, blobs, pdf, edition_id="e1", dpi=150)
+    assert first.pages_recorded == len(PAGE_TEXTS)
+
+    with database.transaction() as connection:
+        page = connection.execute(
+            "SELECT id FROM pages ORDER BY page_index DESC LIMIT 1"
+        ).fetchone()
+        connection.execute(
+            "DELETE FROM chunks_fts WHERE chunk_id IN"
+            " (SELECT id FROM chunk_records WHERE page_id=?)", (page["id"],)
+        )
+        connection.execute("DELETE FROM chunk_records WHERE page_id=?", (page["id"],))
+        connection.execute("DELETE FROM evidence WHERE page_id=?", (page["id"],))
+        connection.execute("DELETE FROM pages WHERE id=?", (page["id"],))
+    assert database.coverage()["pages"] == len(PAGE_TEXTS) - 1
+
+    second = ingest_pdf(database, blobs, pdf, edition_id="e1", dpi=150)
+    assert second.skipped is False
+    assert database.coverage()["pages"] == len(PAGE_TEXTS)
+    assert database.coverage()["transcriptions"] == len(PAGE_TEXTS)
+
+
 def test_ingest_rejects_missing_edition_file(seeded, tmp_path):
     database, pdf, blobs = seeded
     _grant(database)

@@ -151,19 +151,34 @@ def ingest_pdf(
             " AND asset_role='original_scan'",
             (edition_id, report.sha256),
         ).fetchone()
+        recorded_pages = recorded_transcriptions = 0
         if existing is not None:
-            pages_present = connection.execute(
-                "SELECT 1 FROM pages WHERE asset_id=? LIMIT 1", (existing["id"],)
-            ).fetchone() is not None
+            recorded_pages = connection.execute(
+                "SELECT COUNT(*) AS n FROM pages WHERE asset_id=?", (existing["id"],)
+            ).fetchone()["n"]
+            recorded_transcriptions = connection.execute(
+                "SELECT COUNT(*) AS n FROM transcriptions t JOIN pages p ON p.id=t.page_id"
+                " WHERE p.asset_id=?", (existing["id"],)
+            ).fetchone()["n"]
+    pages_present = recorded_pages > 0
     # An asset that exists but has no pages is an *acquired* object that has never been
     # rendered. Skipping it there would make acquisition and ingestion mutually exclusive.
     if existing is not None and pages_present:
-        return IngestResult(
-            asset_id=existing["id"], edition_id=edition_id, sha256=report.sha256,
-            pages_rendered=0, pages_recorded=0, pages_reused=0, transcriptions_created=0,
-            evidence_created=0, chunks_indexed=0, skipped=True,
-            warnings=("identical bytes already archived for this edition",),
+        expected_pages = _pdf_page_count(source)
+        complete = (
+            (expected_pages is None or recorded_pages >= expected_pages)
+            and recorded_transcriptions >= recorded_pages
         )
+        if complete:
+            return IngestResult(
+                asset_id=existing["id"], edition_id=edition_id, sha256=report.sha256,
+                pages_rendered=0, pages_recorded=0, pages_reused=0, transcriptions_created=0,
+                evidence_created=0, chunks_indexed=0, skipped=True,
+                warnings=("identical bytes already archived for this edition",),
+            )
+        # A previous run was interrupted mid-document. Its derived rows are partial, so
+        # they are replaced rather than left to masquerade as a finished edition.
+        _purge_derived(database, str(existing["id"]))
 
     now = utcnow()
     if existing is not None:
@@ -303,12 +318,25 @@ def pending_editions(database: Database, blob_root: str | Path) -> list[tuple[st
     root = Path(blob_root)
     with database.connect() as connection:
         rows = connection.execute(
-            "SELECT a.edition_id, a.storage_key, a.byte_size FROM assets a"
+            "SELECT a.edition_id, a.storage_key, a.byte_size,"
+            " (SELECT COUNT(*) FROM pages p WHERE p.asset_id = a.id) AS recorded_pages,"
+            " (SELECT COUNT(*) FROM transcriptions t JOIN pages p ON p.id = t.page_id"
+            "   WHERE p.asset_id = a.id) AS recorded_transcriptions"
+            " FROM assets a"
             " WHERE a.detected_mime = 'application/pdf' AND a.asset_role = 'original_scan'"
-            " AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.asset_id = a.id)"
             " ORDER BY a.byte_size ASC"
         ).fetchall()
-    return [(str(row["edition_id"]), root / str(row["storage_key"])) for row in rows]
+    pending: list[tuple[str, Path]] = []
+    for row in rows:
+        path = root / str(row["storage_key"])
+        expected = _pdf_page_count(path)
+        incomplete = (
+            row["recorded_pages"] < (expected or 1)
+            or row["recorded_transcriptions"] < row["recorded_pages"]
+        )
+        if incomplete:
+            pending.append((str(row["edition_id"]), path))
+    return pending
 
 
 def _permissive() -> Any:
@@ -335,6 +363,39 @@ def _extract_text_layer(path: Path) -> dict[int, str]:
         for index in range(document.page_count):
             texts[index] = document.load_page(index).get_text("text")
     return texts
+
+
+def _pdf_page_count(path: Path) -> int | None:
+    """Cheap structural count, used to detect an interrupted render. None if unreadable."""
+    try:
+        import pymupdf
+    except ImportError:
+        return None
+    try:
+        with pymupdf.open(str(path)) as document:
+            return document.page_count
+    except Exception:  # noqa: BLE001 - an unreadable PDF is a preflight problem
+        return None
+
+
+def _purge_derived(database: Database, asset_id: str) -> None:
+    """Remove derived rows for an incompletely rendered asset so it can be redone.
+
+    Only derived data is touched: pages, transcriptions, evidence and index rows. The
+    archived original is immutable and is never deleted here.
+    """
+    in_pages = "(SELECT id FROM pages WHERE asset_id=?)"
+    with database.transaction() as connection:
+        connection.execute(
+            f"DELETE FROM chunks_fts WHERE chunk_id IN"
+            f" (SELECT id FROM chunk_records WHERE page_id IN {in_pages})",
+            (asset_id,),
+        )
+        connection.execute(
+            f"DELETE FROM chunk_records WHERE page_id IN {in_pages}", (asset_id,)
+        )
+        connection.execute(f"DELETE FROM evidence WHERE page_id IN {in_pages}", (asset_id,))
+        connection.execute("DELETE FROM pages WHERE asset_id=?", (asset_id,))
 
 
 def _pymupdf_version() -> str:

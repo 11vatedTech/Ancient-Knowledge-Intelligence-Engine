@@ -21,3 +21,8 @@ jobs:
         run: ruff check src tests
       - name: Test with coverage
         run: pytest --cov=aki --cov-report=term-missing
+      - name: Schema smoke test
+        run: |
+          aki init --database .ci/aki.sqlite3
+          aki coverage --database .ci/aki.sqlite3
+          aki verify --database .ci/aki.sqlite3 --blob-root .ci/blobs

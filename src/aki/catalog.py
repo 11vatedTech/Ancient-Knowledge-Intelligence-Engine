@@ -2,8 +2,9 @@
 from __future__ import annotations
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 from .domain import ProcessingOperation, RightsGrant, RightsStatus, SourceRecord
 from .rights import require_permission
 
@@ -30,11 +31,19 @@ class SourceCatalog:
         with self._connect() as db:
             db.executescript(_SCHEMA)
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.database, timeout=15)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON")
-        return db
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     @staticmethod
     def _values(source: SourceRecord) -> tuple[object, ...]:

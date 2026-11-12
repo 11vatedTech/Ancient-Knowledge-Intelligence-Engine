@@ -38,7 +38,7 @@ def test_manifest_reports_line_number_for_invalid_record(tmp_path):
 
 def test_manifest_rejects_non_object_json(tmp_path):
     path = tmp_path / "array.jsonl"
-    path.write_text('[]\\n', encoding="utf-8")
+    path.write_text('[]\n', encoding="utf-8")
     with pytest.raises(ValueError, match="JSON object"):
         list(read_manifest(path))
 

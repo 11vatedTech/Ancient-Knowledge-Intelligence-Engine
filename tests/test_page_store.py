@@ -1,11 +1,12 @@
+import pytest
+
 pymupdf = pytest.importorskip("pymupdf")
 
 from aki.blob_store import ContentAddressedStore
 from aki.catalog import SourceCatalog
 from aki.domain import ProcessingOperation, RightsGrant, RightsStatus, SourceRecord
 from aki.page_store import PageArtifactCatalog
-from aki.pdf import RenderedPage
-from aki.pdf import PDFPageProcessor
+from aki.pdf import PDFPageProcessor, RenderedPage
 
 
 def test_page_manifest_is_transactional_and_idempotent(tmp_path):

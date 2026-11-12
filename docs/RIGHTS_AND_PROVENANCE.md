@@ -19,9 +19,13 @@ region; original artifact SHA-256; processor identity and exact version; configu
 timestamp and pipeline run identifier; raw and normalized output; review state; confidence and
 alternate readings where meaningful.
 
-The PDF renderer currently records source PDF SHA-256, rendered PNG SHA-256, one-based page number,
-PDF page label, source page dimensions, raster dimensions, and DPI. It does not yet persist a
-transactional page manifest or a full processing-run record; that is a subsequent milestone.
+The PDF renderer records source PDF SHA-256, rendered PNG SHA-256, one-based page number, PDF page
+label, source page dimensions, raster dimensions, DPI, PyMuPDF version, and rendering-configuration
+hash. A SQLite page manifest is committed transactionally only after all referenced blobs pass
+integrity and size checks. Exact re-imports are idempotent; conflicting metadata is rejected.
+
+A full processing-run record, resumable per-page scheduling, and orphan-blob reconciliation are
+not yet implemented.
 
 ## Epistemic labels
 - Transcription: proposed reading of visible glyphs.

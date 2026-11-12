@@ -10,6 +10,7 @@ from .blob_store import ContentAddressedStore
 from .catalog import SourceCatalog
 from .domain import ProcessingOperation
 from .manifest import read_manifest
+from .page_store import PageArtifactCatalog
 from .pdf import PDFPageProcessor
 
 
@@ -82,7 +83,15 @@ def main() -> int:
             args.pdf, source.source_id, source.rights,
             ContentAddressedStore(args.blob_root), dpi=args.dpi,
         )
-        print(json.dumps([page.to_dict() for page in pages], ensure_ascii=False, indent=2))
+        manifest_store = PageArtifactCatalog(args.database, ContentAddressedStore(args.blob_root))
+        added, duplicates = manifest_store.record_batch(pages)
+        print(json.dumps({
+            "source_id": source.source_id,
+            "rendered_pages": len(pages),
+            "manifest_added": added,
+            "manifest_duplicates": duplicates,
+            "pages": [page.to_dict() for page in pages],
+        }, ensure_ascii=False, indent=2))
     return 0
 
 

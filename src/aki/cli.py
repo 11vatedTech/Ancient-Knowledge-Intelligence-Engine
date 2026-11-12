@@ -421,6 +421,17 @@ def cmd_ingest_batch(args: argparse.Namespace) -> int:
 
     database = _database(args)
     pending = pending_editions(database, args.blob_root)
+    if args.shard_count > 1:
+        import hashlib
+
+        if not 0 <= args.shard_index < args.shard_count:
+            _emit({"error": "shard-index must be within [0, shard-count)"})
+            return 2
+        pending = [
+            (edition, path) for edition, path in pending
+            if int(hashlib.sha256(edition.encode()).hexdigest(), 16) % args.shard_count
+            == args.shard_index
+        ]
     if args.edition_id:
         pending = [(edition, path) for edition, path in pending if edition == args.edition_id]
     if args.limit is not None:
@@ -713,6 +724,9 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--provider", default=None, choices=["rapidocr", "tesseract"])
     batch.add_argument("--limit", type=int, default=None)
     batch.add_argument("--edition-id", default=None)
+    batch.add_argument("--shard-index", type=int, default=0)
+    batch.add_argument("--shard-count", type=int, default=1,
+                       help="partition editions across parallel workers by stable hash")
     batch.add_argument("--log", default=".aki/ingest-progress.jsonl")
     batch.set_defaults(func=cmd_ingest_batch)
 

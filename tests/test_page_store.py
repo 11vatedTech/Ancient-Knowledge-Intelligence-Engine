@@ -1,11 +1,10 @@
-import pytest
-
 pymupdf = pytest.importorskip("pymupdf")
 
 from aki.blob_store import ContentAddressedStore
 from aki.catalog import SourceCatalog
 from aki.domain import ProcessingOperation, RightsGrant, RightsStatus, SourceRecord
-from aki.page_store import PageArtifactCatalog, PageManifestConflict
+from aki.page_store import PageArtifactCatalog
+from aki.pdf import RenderedPage
 from aki.pdf import PDFPageProcessor
 
 
@@ -44,11 +43,28 @@ def test_page_manifest_is_transactional_and_idempotent(tmp_path):
     assert len(manifests.list_pages("book-001")) == 2
 
 
-def test_page_manifest_rejects_missing_or_corrupt_blob(tmp_path):
+def test_page_manifest_rejects_missing_blob(tmp_path):
     database = tmp_path / "catalog.sqlite3"
     SourceCatalog(database)
     blobs = ContentAddressedStore(tmp_path / "blobs")
     manifests = PageArtifactCatalog(database, blobs)
+    page = RenderedPage(
+        source_id="missing-source",
+        page_number=1,
+        page_label="1",
+        source_pdf_sha256="a" * 64,
+        image_sha256="b" * 64,
+        image_size_bytes=12,
+        pixel_width=10,
+        pixel_height=10,
+        page_width_points=10.0,
+        page_height_points=10.0,
+        dpi=72,
+        blob_path=str(tmp_path / "missing.png"),
+        renderer_name="PyMuPDF",
+        renderer_version="test",
+        config_sha256="c" * 64,
+    )
     with pytest.raises(FileNotFoundError):
-        manifests.record_batch([])
-    assert manifests.list_pages("unknown") == []
+        manifests.record_batch([page])
+    assert manifests.list_pages("missing-source") == []

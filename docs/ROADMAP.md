@@ -11,10 +11,11 @@
 ## Stage 1 — Archival ingestion
 - [x] Preserve original bytes in a SHA-256 content-addressed blob store.
 - [x] Inspect local PDFs, capture source hashes and metadata, and enforce page-count limits.
-- [x] Render deterministic page PNG artifacts with page labels, dimensions, DPI, and source-to-page provenance.
-- [ ] Persist page manifests transactionally and make ingestion resumable across process interruption.
+- [x] Render bounded-DPI page PNG artifacts with page labels, dimensions, renderer identity, and source-to-page provenance.
+- [x] Persist verified page manifests transactionally and make repeat ingestion idempotent.
+- [ ] Add crash-resumable page-by-page scheduling and orphan-blob reconciliation.
 - [ ] Add source adapters with terms, robots, rate-limit, and permission handling.
-- [ ] Add job leases, retry budgets, audit events, and artifact reopening/hash verification.
+- [ ] Add job leases, retry budgets, audit events, and recovery testing.
 
 ## Stage 2 — Multimodal document intelligence
 - [ ] PDF structure, page segmentation, and region coordinates.

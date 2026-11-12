@@ -1,6 +1,5 @@
+import pymupdf
 import pytest
-
-pymupdf = pytest.importorskip("pymupdf")
 
 from aki.blob_store import ContentAddressedStore
 from aki.catalog import SourceCatalog

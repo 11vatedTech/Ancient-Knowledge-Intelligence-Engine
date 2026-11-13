@@ -240,6 +240,18 @@ The pass was sustaining 0.067 pages/s with the CPU at 69%. Cause: every connecti
 so three workers serialised on it. With the pragma applied once at creation and
 `synchronous=NORMAL` for batch workers, the same workload sustained **1.7 pages/s** — 25×.
 
+That 1.7 pages/s applies to text-layer pages. OCR-heavy stretches run near 0.1–0.3
+pages/s aggregate, because a scanned page costs ~6 s of OCR regardless of arrangement:
+
+```
+CPU (24 threads)      6.20 s/page
+CUDA + cuDNN 9        6.16 s/page     onnxruntime-gpu 1.31.1, RTX 5070 Ti
+```
+
+The GPU is not the lever. RapidOCR's resize, detection post-processing and CTC decode are
+CPU-bound, so the wall-clock cost survives the move to CUDA. OCR throughput on this corpus
+is therefore CPU-limited at roughly 6 s per scanned page.
+
 ## What is **not** tested
 
 - OCR / HTR accuracy — no engine installed, no labelled set, **no CER measured**

@@ -23,7 +23,7 @@ OCR is implemented: `src/aki/ocr.py` defines a provider contract with two adapte
 - **No HTR.** Handwritten material is out of scope; the engine will produce low-confidence nonsense rather than refuse. Confidence is stored and visible precisely so this can be filtered, but nothing filters it automatically.
 - **No proofing or correction workflow.** Transcriptions are `unreviewed`. There is no human review queue and no diff against a second engine pass.
 - **No layout analysis or reading order beyond box geometry.** Multi-column pages come out in detector order, which is usually but not always reading order. Tables and marginalia are not modelled.
-- **CPU only.** ONNX Runtime exposes only `CPUExecutionProvider` on this machine, so no CUDA acceleration is available even though a capable GPU is installed.
+- **GPU acceleration measured as ineffective, not merely absent.** `onnxruntime-gpu` and the CUDA 12 / cuDNN 9 DLLs are installed and `CUDAExecutionProvider` is available, but OCR of the same page took 6.16 s on CUDA against 6.20 s on CPU. The cost sits in RapidOCR's CPU-side preprocessing and post-processing, not in inference, so the RTX 5070 Ti buys nothing here. Recorded so nobody repeats the experiment.
 - **No language model post-correction.** 19th-century long-s, ligatures and archaic spelling survive into the index as recognised.
 - **Eight editions hold image or ZIP assets, not PDFs** (5 JPEG, 3 PNG, 1 ZIP across 8 editions). The PDF pipeline cannot ingest them; they need an image-ingestion path that does not yet exist.
 

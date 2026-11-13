@@ -515,12 +515,16 @@ class Database:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(str(self.path), timeout=30, isolation_level=None)
+        connection = sqlite3.connect(str(self.path), timeout=60, isolation_level=None)
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA journal_mode = WAL")
-            connection.execute("PRAGMA synchronous = FULL")
+            connection.execute("PRAGMA busy_timeout = 60000")
+            # ``journal_mode`` is a property of the database file, not the connection. It
+            # used to be re-asserted here on every connect, and because ingestion opens a
+            # connection per page that meant three workers serialising on a lock they did
+            # not need. It is set once at creation and on migration instead.
+            connection.execute(f"PRAGMA synchronous = {_synchronous_mode()}")
             yield connection
         finally:
             connection.close()
@@ -690,9 +694,25 @@ def migration_checksum(migration: Migration) -> str:
     return hashlib.sha256(f"{migration.version}:{migration.name}:{migration.sql}".encode()).hexdigest()
 
 
+def _synchronous_mode() -> str:
+    """Durability policy for this process.
+
+    ``FULL`` fsyncs on every commit. ``NORMAL`` is still crash-safe under WAL (only the
+    last transaction can be lost on power failure, never integrity) and is markedly faster
+    for bulk derived work. Default stays FULL; a batch worker opts in explicitly.
+    """
+    import os
+
+    requested = os.environ.get("AKI_SQLITE_SYNCHRONOUS", "FULL").upper()
+    return "NORMAL" if requested == "NORMAL" else "FULL"
+
+
 def initialize(path: str | Path) -> dict[str, Any]:
     """Create or upgrade a database and return a report of what happened."""
     database = Database(path)
+    database.path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(str(database.path), timeout=60, isolation_level=None) as setup:
+        setup.execute("PRAGMA journal_mode = WAL")
     before = database.schema_version()
     applied = database.migrate()
     return {

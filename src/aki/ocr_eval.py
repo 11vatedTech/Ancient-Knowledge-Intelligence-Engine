@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -94,6 +95,7 @@ class Sample:
     page_index: int
     image_path: Path
     reference: str
+    pdf_path: Path | None = None
 
 
 def sample_pages(
@@ -113,7 +115,7 @@ def sample_pages(
     with database.connect() as connection:
         rows = connection.execute(
             "SELECT a.edition_id, e.edition_title, p.page_index, p.page_image_key,"
-            " t.text_content"
+            " a.storage_key, t.text_content"
             " FROM transcriptions t"
             " JOIN pages p ON p.id = t.page_id"
             " JOIN assets a ON a.id = p.asset_id"
@@ -134,6 +136,7 @@ def sample_pages(
                 page_index=int(row["page_index"]),
                 image_path=root / row["page_image_key"],
                 reference=row["text_content"],
+                pdf_path=root / row["storage_key"],
             ))
     rng = random.Random(seed)
     rng.shuffle(pool)
@@ -148,15 +151,37 @@ def sample_pages(
     return chosen
 
 
+def _render_at(pdf_path: Path, page_index: int, dpi: int, destination: Path) -> Path:
+    import pymupdf
+
+    with pymupdf.open(str(pdf_path)) as document:
+        document.load_page(page_index).get_pixmap(dpi=dpi).save(str(destination))
+    return destination
+
+
 def evaluate(
     samples: Sequence[Sample],
     provider: OcrProvider,
+    *,
+    render_dpi: int | None = None,
 ) -> dict[str, Any]:
-    """OCR each sampled page and score it against its reference text."""
+    """OCR each sampled page and score it against its reference text.
+
+    With ``render_dpi`` the page is re-rendered from the archived PDF at that resolution
+    instead of using the stored image, which is what makes a 150-vs-300 DPI comparison
+    measure resolution rather than something else.
+    """
     per_page: list[dict[str, Any]] = []
     started = time.perf_counter()
+    scratch = Path(tempfile.mkdtemp(prefix="aki-eval-"))
     for sample in samples:
-        if not sample.image_path.exists():
+        image = sample.image_path
+        if render_dpi is not None and sample.pdf_path is not None:
+            image = _render_at(
+                sample.pdf_path, sample.page_index, render_dpi,
+                scratch / f"{sample.edition_id}-{sample.page_index}-{render_dpi}.png",
+            )
+        if not image.exists():
             per_page.append({
                 "edition_id": sample.edition_id,
                 "page_index": sample.page_index,
@@ -164,7 +189,7 @@ def evaluate(
             })
             continue
         try:
-            recognised = provider.ocr(sample.image_path)
+            recognised = provider.ocr(image)
         except Exception as exc:  # noqa: BLE001 - recorded per sample, not swallowed
             per_page.append({
                 "edition_id": sample.edition_id,
@@ -180,6 +205,7 @@ def evaluate(
             "edition_title": sample.edition_title[:60],
             "page_index": sample.page_index,
             "status": "scored",
+            "render_dpi": render_dpi,
             "reference_chars": len(reference),
             "ocr_chars": len(hypothesis),
             "cer": round(character_error_rate(reference, hypothesis), 4),

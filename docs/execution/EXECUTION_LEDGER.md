@@ -72,7 +72,7 @@
 | Rights basis | self-attested permission, `cleared_limited`, 257 rows |
 | Bytes stored | 3,052,062,410 (2.84 GiB) |
 
-Every discovered record has exactly one disposition, and every one is now acquired and integrity-verified. Acquisition is **not** research readiness: 0 of 257 have been rendered or transcribed, because no OCR layer exists yet.
+Every discovered record has exactly one disposition, and every one is now acquired and integrity-verified. Acquisition is **not** research readiness: **140 / 249 PDF editions** have been rendered and transcribed, **25,707 pages** carry **25,484 evidence passages**, and **8 non-PDF editions** (5 JPEG, 3 PNG, 1 ZIP) are recorded as deferred with a stated reason rather than silently dropped. OCR accuracy is measured, not assumed: mean CER 0.214 at 150 DPI against 0.242 at 300, both against embedded text layers and therefore a lower bound. The pass continues in the background.
 
 ---
 

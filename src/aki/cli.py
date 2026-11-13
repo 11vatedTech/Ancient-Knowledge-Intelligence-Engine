@@ -504,7 +504,7 @@ def cmd_ocr(args: argparse.Namespace) -> int:
         if not samples:
             _emit({"error": "no page has both a stored image and an embedded text layer"})
             return 2
-        report = evaluate(samples, engine)
+        report = evaluate(samples, engine, render_dpi=args.dpi)
         report["fingerprint"] = evaluation_fingerprint(report)
         destination = Path(args.out)
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -759,6 +759,8 @@ def build_parser() -> argparse.ArgumentParser:
         "evaluate", help="score OCR against embedded text layers on real pages"
     )
     ocr_evaluate.add_argument("--samples", type=int, default=30)
+    ocr_evaluate.add_argument("--dpi", type=int, default=None,
+                              help="re-render sampled pages at this DPI instead of using stored images")
     ocr_evaluate.add_argument("--provider", default=None)
     ocr_evaluate.add_argument("--out", default=".aki/ocr-eval.json")
     ocr_evaluate.set_defaults(func=cmd_ocr, edition=None, page=None)

@@ -205,6 +205,41 @@ Unit coverage: `tests/test_ocr.py` — provider availability reporting, unknown-
 rejection, scan-without-OCR records empty text, scan-with-OCR records engine identity +
 confidence + geometry + evidence, and text-layer pages are never overwritten by OCR.
 
+### OCR accuracy — measured against embedded text layers
+
+`aki ocr evaluate` scores OCR output against the publisher's text layer for the same page.
+Reference agreement, not human-verified ground truth; treated as a lower bound.
+
+Same six sampled pages, both resolutions:
+
+```
+150 DPI   mean CER 0.2139   median 0.0515   p90 0.2114   mean WER 0.3224   108 s
+300 DPI   mean CER 0.2421   median 0.0848   p90 0.2748   mean WER 0.3485   144 s
+```
+
+Per page (CER 150 / 300): 0.000/0.000 · 0.211/0.275 · 0.000/0.085 · 0.021/0.021 ·
+1.000/1.000 · 0.051/0.072.
+
+**The 1.000 is a false negative.** *Meditations; A New Translation* p5 has a corrupt
+embedded layer (`candsiivveacaccarcads meine dane atop dooce te set ees rage`); OCR returned
+the correct contents page (`contents title page chronology half title page introduction by
+gregory hays ...`) at 0.865 confidence. Scoring it against the broken reference marks a
+correct transcription as total failure. This is why the figure is a floor, not an estimate.
+
+10-page sample at 150 DPI: mean CER 0.2232, median 0.0515, p90 0.732 — bimodal. Most pages
+near 5%, a minority failing outright. Nothing routes those failures to review yet.
+
+**Confidence is not accuracy.** The failing page carried 0.865 mean confidence while being
+completely wrong against its reference (and correct in fact). Confidence cannot substitute
+for the review queue.
+
+### Throughput defect found and fixed
+
+The pass was sustaining 0.067 pages/s with the CPU at 69%. Cause: every connection re-ran
+`PRAGMA journal_mode = WAL`, which takes a lock, and ingestion opens a connection per page,
+so three workers serialised on it. With the pragma applied once at creation and
+`synchronous=NORMAL` for batch workers, the same workload sustained **1.7 pages/s** — 25×.
+
 ## What is **not** tested
 
 - OCR / HTR accuracy — no engine installed, no labelled set, **no CER measured**

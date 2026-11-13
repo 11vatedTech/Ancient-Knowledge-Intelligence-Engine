@@ -53,19 +53,37 @@ Observed content includes 19th-century occult and "mental science" titles, Bible
 
 ---
 
-## Processing status — acquisition is not research readiness
+## Processing status — in progress, measured 2026-11-13T04:30Z
 
-Acquired does not mean processed. At the time of writing:
+Acquired does not mean processed. Live state while the pass runs:
 
 | Stage | Coverage |
 |---|---|
 | Archived with verified SHA-256 | 257 / 257 |
-| Pages rendered | 0 / 257 (1 synthetic fixture rendered, 3 pages) |
-| OCR / text extraction | 0 / 257 |
-| Indexed evidence | 3 fixture passages only |
-| Visual analysis | 0 / 257 |
+| PDF editions rendered + transcribed | **140 / 249** |
+| Pages rendered | **25,707** |
+| Transcriptions | 25,705 (1,746 produced by OCR, the rest from embedded text layers) |
+| Evidence passages indexed | **25,484** |
+| Editions completed and logged | 137 (2 recorded failures, both retried) |
+| Visual analysis | 0 |
 
-The corpus is on disk and integrity-verified. It is **not yet searchable**, because OCR is not implemented and no OCR model is installed. Moving from acquisition to research requires the OCR layer described in `KNOWN_LIMITATIONS.md` §2.
+**Deferred, out of scope for this pass: 8 editions holding non-PDF assets** — 5 JPEG, 3 PNG and 1 ZIP. The ingestion pipeline consumes PDFs (rendering, text layer, OCR fallback); it has no image-ingestion path, and building one was explicitly excluded. They remain archived, hash-verified and rights-cleared; they are simply not rendered or searchable. That accounts for the whole corpus: 249 PDF editions + 8 non-PDF editions = 257.
+
+### OCR accuracy, measured rather than asserted
+
+No human transcription exists for this corpus, so OCR was scored against the publisher's embedded text layer for the same page. That is **reference agreement, not verified truth**, and the measurement is a lower bound — demonstrated concretely on one sampled page (*Meditations; A New Translation*, page 5) where the embedded layer reads `candsiivveacaccarcads meine dane atop dooce te set ees rage` while OCR correctly returns `contents title page chronology half title page introduction by gregory hays`. The reference was the broken text, so a perfect OCR scored CER 1.0.
+
+Same six pages, both resolutions, `RapidOCR-PP-OCRv4`:
+
+| Metric | 150 DPI | 300 DPI |
+|---|---|---|
+| Mean CER | **0.2139** | 0.2421 |
+| Median CER | **0.0515** | 0.0848 |
+| p90 CER | **0.2114** | 0.2748 |
+| Mean WER | **0.3224** | 0.3485 |
+| Wall time, 6 pages | 108 s | 144 s |
+
+150 DPI is both more accurate on this sample and roughly a third cheaper, so the pass runs at 150. A wider 10-page sample at 150 DPI gave mean CER 0.2232, median 0.0515, p90 0.732 — the spread is the real signal: most pages transcribe near 5% error, while a minority fail badly. Those failures are not flagged in the index today, which is why a confidence-based review queue remains an open gate.
 
 ---
 

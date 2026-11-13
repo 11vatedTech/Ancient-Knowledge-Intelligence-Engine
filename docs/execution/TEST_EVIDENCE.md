@@ -252,6 +252,47 @@ The GPU is not the lever. RapidOCR's resize, detection post-processing and CTC d
 CPU-bound, so the wall-clock cost survives the move to CUDA. OCR throughput on this corpus
 is therefore CPU-limited at roughly 6 s per scanned page.
 
+### Worker count — measured, no gain
+
+```
+3 shards   11 pages / 120 s   0.092 pages/s
+4 shards    8.8 pages / 120 s 0.073 pages/s
+```
+
+Within noise and slightly worse, so worker count is not a throughput lever here and is not
+claimed as one. Four shards were left running rather than churning the pass again.
+
+### Batch close-out state (2026-11-13T05:15Z)
+
+Reconciled per edition against each PDF's real page count:
+
+```
+PDF editions            249
+  complete              140
+  partial (interrupted)   4
+  not started           105
+  unreadable              0
+
+pages                 26,635
+transcriptions        26,631   (24,856 text layer / 1,775 OCR)
+evidence              26,339
+chunk_records         26,336
+chunks_fts            26,336   (rebuild matches)
+```
+
+```
+$ aki verify
+assets_checked: 258   assets_missing_or_corrupt: []
+quick_check: ok   foreign_key_violations: 0   schema_version: 2   ok: true
+
+$ aki index-rebuild
+{"chunks_indexed": 26336}
+```
+
+The 4 partial editions are the ones interrupted by stopping the shards for this snapshot.
+They are detected by page-count reconciliation and re-rendered on resume — the recovery path
+still to be exercised at corpus scale, since only unit tests cover it so far.
+
 ## What is **not** tested
 
 - OCR / HTR accuracy — no engine installed, no labelled set, **no CER measured**

@@ -72,7 +72,7 @@
 | Rights basis | self-attested permission, `cleared_limited`, 257 rows |
 | Bytes stored | 3,052,062,410 (2.84 GiB) |
 
-Every discovered record has exactly one disposition, and every one is now acquired and integrity-verified. Acquisition is **not** research readiness: **140 / 249 PDF editions** have been rendered and transcribed, **25,707 pages** carry **25,484 evidence passages**, and **8 non-PDF editions** (5 JPEG, 3 PNG, 1 ZIP) are recorded as deferred with a stated reason rather than silently dropped. OCR accuracy is measured, not assumed: mean CER 0.214 at 150 DPI against 0.242 at 300, both against embedded text layers and therefore a lower bound. The pass continues in the background.
+Every discovered record has exactly one disposition, and every one is acquired and integrity-verified. Acquisition is **not** research readiness: **140 / 249 PDF editions** are fully rendered and transcribed (4 partial, 105 not started), covering **26,635 pages**, **26,339 evidence passages** and **26,336 indexed chunks**; **24,856 transcriptions come from embedded text layers and 1,775 from OCR**. The **8 non-PDF editions** (5 JPEG, 3 PNG, 1 ZIP) are deferred with that reason, so the arithmetic closes: 249 + 8 = 257. Reconciliation is exact (140 + 4 + 105 = 249, 0 unreadable); `aki verify` is clean (258 assets, 0 corrupt, 0 FK violations) and the FTS rebuild matches chunk count. OCR accuracy is measured, not assumed: mean CER 0.214 at 150 DPI against 0.242 at 300, WER 0.322 against 0.349, scored against embedded text layers and therefore a lower bound. Remaining: ~33,000 pages, roughly 8–12 hours of continuous compute, dominated by large-format scans at 20–85 s/page.
 
 ---
 

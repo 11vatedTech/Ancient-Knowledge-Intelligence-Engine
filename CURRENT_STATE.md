@@ -12,7 +12,8 @@
   `scripts/room_walk.py --base http://127.0.0.1:8765` (49/49 on the real archive, including
   live answers on desktop and phone; run it with the system Python, which has Playwright).
 - **Decisions**: `docs/execution/DECISION_LOG.md` ADR-016 to ADR-031.
-- **Commits**: `2f9e536` (code, docs), `748264c` (Library). Not pushed.
+- **Release**: v0.2.0 (`CHANGELOG.md`). The shared repository holds the engine only; the
+  books stay in `Library/` and `C:\AKI` on this computer and are ignored by git.
 
 ## Open items
 
@@ -37,7 +38,7 @@ What the vision asks for next, in order of value per effort:
 1. **Cited answers — built (ADR-031).** Research page: "Answer" (Qwen 3.5 9B) and
    "Think harder" (Gemma 4 26B), both local through Ollama. Every sentence is checked
    against the page it cites and withheld if it fails; the run, the passages and each
-   sentence are recorded as a case, a model run, evidence and claims. Commit `2582874`.
+   sentence are recorded as a case, a model run, evidence and claims.
 2. **Comparing sources** — the same packet grouped by book, so the model can say where
    books agree, differ or contradict each other, always quoting.
 3. **Entity extraction beyond the curated list** — proposed people, places and works,

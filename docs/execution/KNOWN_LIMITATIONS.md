@@ -1,5 +1,14 @@
 # Known Limitations
 
+> **Update, 16 November 2026 (v0.2.0): cited answers.** §6 is partly addressed. The research
+> page can now have a local model (Qwen 3.5 9B, or Gemma 4 26B) write an answer from gathered
+> passages; every sentence is checked against the page it cites and withheld if its names,
+> numbers, quotations or most of its words are not there (ADR-031). Still true: the check
+> cannot tell whether a paraphrase keeps the page's sense (one kept sentence reversed a
+> negation); a sentence whose first word is an invented name is caught only by the word-share
+> test; the model often does not disclose a curator's note itself, so the page marks such
+> sentences. `relationships` remains empty and no comparison across books is written yet.
+
 > **Update, 13 November 2026.** Several items below are now partly addressed and are
 > qualified here rather than deleted:
 >

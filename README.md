@@ -4,10 +4,17 @@
 
 AKI preserves the distinction between visible source content, proposed transcription, translation, visual observation, and researcher inference. Every derived assertion must remain traceable to a specific source edition and page-level evidence.
 
-> **Status:** Gate 0 and Gate 1 are complete and executed. Gates 2–7 are partial. Read
+> **Status (v0.2.0, November 2026):** the whole corpus is read and open in a local reading
+> room, with search by words and by meaning, a curated index, plates, and **cited answers
+> written by a local language model and checked sentence by sentence**. Read
+> [`CURRENT_STATE.md`](CURRENT_STATE.md) for where things stand,
 > [`docs/execution/KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md) before relying on
-> any capability, and [`docs/execution/ARCHITECTURE_TRACEABILITY.md`](docs/execution/ARCHITECTURE_TRACEABILITY.md)
-> for the per-requirement status. No OCR, vision, embedding, or language model is installed.
+> any capability, and [`CHANGELOG.md`](CHANGELOG.md) for what changed.
+
+> **The books are not in this repository.** The corpus permission covers reading and research
+> on the owner's computer only; redistribution and third-party sharing are denied. `Library/`
+> and the archive (`C:\AKI` by default) are kept out of git. What is shared here is the engine:
+> code, tests, schema, design and decision records.
 
 ## Implemented and verified
 
@@ -25,9 +32,15 @@ AKI preserves the distinction between visible source content, proposed transcrip
 - **Backup and restore** — online backup verified by reopening, integrity check, SHA-256, refusal without confirmation, automatic pre-restore safety copy.
 - **Hardware doctor** — measured CPU/RAM/GPU/disk/tool state and a derived scheduling budget; unavailable probes reported as `null`.
 
+- **OCR** — RapidOCR (PP-OCRv4 on ONNX Runtime, offline) for pages without a text layer, with engine, version, confidence and line boxes on every transcription; fidelity measured against embedded text layers.
+- **Meaning search** — model2vec `potion-retrieval-32M`, or an offline LSA model trained on the corpus, fused with lexical search by rank.
+- **Concordance and plates** — a curated index of 235 names linked to every page that names them, and plates found by measuring each scan.
+- **Cited answers** — a local model (Qwen 3.5 9B, or Gemma 4 26B to "think harder", through Ollama on 127.0.0.1) writes from whole passages; every sentence is checked deterministically against the page it cites and withheld if it fails (ADR-031).
+- **Reading room** — a loopback-only web interface over all of the above (FastAPI), tested in a real browser by `scripts/room_walk.py`.
+
 ## Not implemented
 
-OCR/HTR, layout segmentation, page regions, vision or visual-similarity analysis, embeddings or semantic retrieval, knowledge-graph population, HTTP API, desktop application, and any evaluation of retrieval or transcription accuracy. See [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md).
+HTR and layout segmentation, page regions, vision-language plate descriptions, entity extraction beyond the curated index, typed relationships, a desktop shell, and a gold-set evaluation of retrieval. Cited answers check that each sentence is drawn from its page's words, not that a paraphrase keeps the page's sense. See [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md).
 
 ## Catalog
 
@@ -35,7 +48,7 @@ All **257** records of The Holy Word's public catalog were enumerated, imported 
 
 Acquisition ran under a **self-attested permission** recorded at [`docs/execution/PERMISSION_ATTESTATION.md`](docs/execution/PERMISSION_ATTESTATION.md), which states plainly that it is an assertion by the claimant rather than an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
 
-**OCR is wired in.** Ingestion renders each page, uses the embedded text layer where one exists, and falls back to RapidOCR (PP-OCRv4 on ONNX Runtime, offline, CPU) for scanned pages — recording the engine, version, confidence and per-line boxes on every transcription. `aki ocr providers` reports what is available; `aki ingest-batch --ocr` runs the whole corpus in one resumable pass.
+Ingestion renders each page, uses the embedded text layer where one exists, and falls back to OCR for scanned pages. `aki ocr providers` reports what is available; `aki ingest-batch --ocr` runs the whole corpus in one resumable pass.
 
 See [`ACQUISITION_REPORT.md`](docs/execution/ACQUISITION_REPORT.md) and [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md) for what is and is not yet true of the processed corpus.
 
@@ -53,7 +66,12 @@ but not sharing.
 - **Index**: 235 curated figures, places, scriptures, traditions and ideas, each linked to
   every page that names it.
 - **Plates**: engravings, maps and diagrams found by measuring each scan.
-- **Research**: cited, verified evidence gathering (no generated conclusions).
+- **Research**: ask a question and choose **Answer** (Qwen 3.5 9B, seconds) or **Think
+  harder** (Gemma 4 26B, about a minute). The model reads whole passages the archive gathers
+  and answers from them alone; each sentence carries its page citation and is checked
+  against that page, and any that fails is withheld and shown apart with the reason. Both
+  models run through Ollama on this computer. Without Ollama, the page still gathers and
+  cites the passages without writing an answer.
 - **The margin**: beside each transcription, the index names on that page and the nearest
   passages in other books, found by likeness of meaning. Withheld where the machine's
   reading of the page is too unsure to build on.
@@ -74,7 +92,8 @@ one that fails, without opening the reading room:
 2. **Library**: readable copies of the originals, rights-checked and audited (ADR-016).
 3. **Finish**: verified backup and vault manifest, then read every remaining book (resumable),
    build meaning search, the index and the plates.
-4. **Library sync**: copy books the project's `Library/` lacks, for OneDrive to sync.
+4. **Library sync**: copy books the project's `Library/` lacks, for OneDrive to sync
+   (`Library/` is ignored by git and never committed).
 5. **Serve**: open the reading room.
 
 Logs, worker logs, backup results and reports are kept under `C:\AKI\logs`. Afterwards,
@@ -90,16 +109,23 @@ Logs, worker logs, backup results and reports are kept under `C:\AKI\logs`. Afte
 
 ## Development
 
-Requires Python 3.11+.
+Requires Python 3.11+. The tests build their own small fixture corpus; no books are needed.
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,room]"     # add ,ocr for RapidOCR
 pytest
-ruff check src tests
+ruff check src tests scripts
 aki --help
 ```
+
+Optional, for cited answers: install [Ollama](https://ollama.com) and pull the two models
+(`ollama pull qwen3.5:9b`, `ollama pull gemma4:26b`). `AKI_ANSWER_MODEL`, `AKI_DEEP_MODEL`
+and `AKI_OLLAMA_URL` override the defaults; the URL must be on this computer.
+
+`scripts/room_walk.py --base http://127.0.0.1:8765` walks the running reading room in Edge
+through Playwright (`pip install playwright`); it asks for live answers when Ollama is up.
 
 ## Operator workflow
 

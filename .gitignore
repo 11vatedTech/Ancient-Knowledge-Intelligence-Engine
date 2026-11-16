@@ -14,3 +14,11 @@ data/holyword/books_raw.json
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+
+# The books themselves never enter git. The corpus permission covers reading and research
+# on this computer only; redistribution is denied (docs/execution/PERMISSION_ATTESTATION.md).
+Library/
+
+# Machine-local: the archive home written by `aki relocate`, and launcher test runs
+aki.config.json
+test-results/

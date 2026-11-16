@@ -180,6 +180,37 @@ def main() -> int:
             page.wait_for_timeout(200)
             check("escape closes the plate viewer", not page.evaluate("document.getElementById('viewer').open"))
 
+        # ---------------------------------------------------------------- a cited answer
+        models = page.request.get(f"{args.base}/api/answer/models").json()
+        if models["running"] and models["models"][0]["installed"]:
+            for label, width, height in (("desktop", 1440, 900), ("phone", 390, 844)):
+                if label == "phone":
+                    page.set_viewport_size({"width": width, "height": height})
+                go(page, "/research")
+                page.wait_for_function("!document.getElementById('ask-quick').disabled", timeout=30_000)
+                page.fill("#question", "What did the Watchers teach mankind?")
+                page.click("#ask-quick")
+                page.wait_for_selector(".answer, #research-out .note", timeout=300_000)
+                said = page.evaluate("document.querySelectorAll('.answer .said').length")
+                cites = page.evaluate("document.querySelectorAll('.answer .cite').length")
+                check(f"{label}: an answer is written, every kept sentence cited",
+                      said > 0 and cites >= said,
+                      page.evaluate("document.getElementById('research-out').textContent")[:120])
+                if cites:
+                    page.click(".answer .cite")
+                    page.wait_for_timeout(900)
+                    check(f"{label}: a citation opens its passage",
+                          page.evaluate("!!document.querySelector('.sources li.lit details[open]')"))
+                overflow = page.evaluate(
+                    "document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                check(f"{label}: the answer fits the page", overflow <= 0, f"{overflow}px")
+                if shots:
+                    page.evaluate("window.scrollTo(0, 0)")
+                    page.screenshot(path=str(shots / f"answer-{label}.png"), full_page=True)
+            page.set_viewport_size({"width": 1440, "height": 900})
+        else:
+            print("skip  cited answers: the local model service is not running")
+
         # ---------------------------------------------------------------- the chart
         go(page, "/chart", 1500)
         stars = page.evaluate("document.querySelectorAll('.chart .star').length")

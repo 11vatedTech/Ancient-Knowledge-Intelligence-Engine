@@ -302,3 +302,17 @@ Given 30-word search snippets instead of passages, Qwen correctly said the sourc
 
 **Consequence.** Cited answers are feasible locally at no cost. Two findings carry into the build: answers need passage-length context, and some listed "books" are themselves AI-generated text (one begins "Grok 3 Raw"), which answers should disclose.
 
+
+## ADR-031 — Cited answers: write locally, check every sentence deterministically
+
+**Context.** Step 1 of the intelligence layer (CURRENT_STATE.md): a model writes an answer from the research packet, and nothing it writes reaches the reader unchecked. The existing verifier (`evidence.verify_claims`) only proves that a citation resolves to a page; it cannot tell whether a sentence is on that page.
+
+**Decision.** `src/aki/answer.py` does four independent steps. *Gather*: words and meaning search fused, at most two passages per book, eight in all, each a window of about 1,400 characters around the densest run of the question's words, within editions whose rights permit `internal_research` (meaning-only finds also need `create_embeddings`). Each passage is stored as an `evidence` row before the model sees it. *Write*: Ollama on loopback only (`OllamaWriter` refuses any other host), thinking off, temperature 0.2; "Answer" uses `qwen3.5:9b`, "Think harder" uses `gemma4:26b` (`AKI_ANSWER_MODEL` / `AKI_DEEP_MODEL` override). *Check*: each sentence must cite a passage it was given; its capitalised names (after the first word) and its numbers must be on the cited pages (a book's title and curator's note also count); words in quotation marks must be on the page, allowing a character similarity of 0.88 for slips in a machine reading ("a neans" for "a means") but not rewording; and at least 60% of its other content words must be there. Failing sentences are withheld and shown apart with the reason. *Record*: a `research_cases` row, a `model_runs` row (`task_type='cited_answer'`, digest, Ollama version, prompt version, tokens/s), and every sentence as a `model_inferred` claim: kept ones linked `source_of_claim` to their evidence and verified, withheld ones `rejected`.
+
+Only progress is streamed to the browser (`POST /api/answer`, NDJSON); the draft is never shown before it is checked. One answer runs at a time.
+
+**Measured on the real archive (16 November 2026).** Qwen: about 59 tokens/s, 5–17 s per answer including the model load. Gemma: about 30–35 tokens/s, about 45 s. Over seven answers the checker withheld invented names ("Eve", "Giza"), invented dates ("1903", "1922") and loose paraphrases, and kept the rest.
+
+**Limits, said beside every answer.** The check proves that a sentence is made from its page's words, not that it keeps the page's sense: one kept sentence read "taught secret things that caused men not to perish", reversing a negation in its source. A sentence whose first word is an invented name is caught only by the word-share test.
+
+**The Grok transcript.** "Watchers-Angels-Enoch-Giants-Demons" is a saved Grok 3 chat, not an old text. It now carries a curator's note (`app/notes.json`). The prompt tells the model to name the note when it uses such a passage; Qwen usually does not, so the page itself marks any sentence that cites a noted book with † and shows the note under the passage, whatever the model wrote. Leaving such books out of answers altogether is a one-line change if the owner prefers.

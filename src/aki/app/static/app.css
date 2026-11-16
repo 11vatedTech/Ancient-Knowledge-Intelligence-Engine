@@ -387,6 +387,48 @@ mark { background: var(--mark); color: inherit; padding: 0 .12em; border-radius:
 .dossier .seal { display: block; font-style: italic; font-variant-caps: normal; letter-spacing: 0; font-size: var(--f-14); }
 .dossier .seal.supported { color: var(--gilt); }
 .dossier p { font-size: var(--f-18); line-height: 1.5; }
+/* cited answers: the answer is a leaf of paper; its passages follow like footnotes */
+.ask-answer { grid-template-columns: 1fr auto; }
+.ask-actions { display: flex; gap: .6rem; }
+.ask-models { grid-column: 1 / -1; font-size: var(--f-14); color: var(--ink-2); font-style: italic; margin: -.2rem 0 0; text-wrap: pretty; }
+.ask-models em { font-style: normal; }
+.ask-gather { grid-column: 1 / -1; justify-self: start; font-size: var(--f-16); }
+.answer-stage small { display: block; font-size: var(--f-14); margin-top: .4rem; font-variant-numeric: tabular-nums; }
+.answer { max-width: 44rem; margin: 2.6rem auto 0; padding: clamp(1.4rem, 4vw, 2.8rem) clamp(1.2rem, 5vw, 3.4rem); }
+.answer > p { font-size: var(--f-20); line-height: 1.6; text-wrap: pretty; hyphens: auto; }
+.answer > p + p { text-indent: 1.4em; margin-top: .2rem; }
+.answer .verdict { margin: .4rem auto 1rem; text-indent: 0; }
+.answer sup { line-height: 0; margin-left: .08em; }
+.cite { background: none; border: 0; padding: 0 .1em; cursor: pointer; color: var(--accent); font: 400 .72em/1 var(--text); font-variant-numeric: lining-nums; text-decoration: underline; text-decoration-thickness: .5px; text-underline-offset: .15em; }
+.cite:hover, .cite:focus-visible { color: var(--ink); }
+.noted-mark { color: var(--gilt); margin-left: .05em; cursor: help; }
+.answer-colophon { margin-top: 1.6rem !important; padding-top: .9rem; border-top: 1px solid var(--rule); font-size: var(--f-14) !important; line-height: 1.5 !important; color: var(--ink-2); font-style: italic; text-indent: 0 !important; }
+.withheld { margin-top: 1rem; font-size: var(--f-16); }
+.withheld summary { cursor: pointer; color: var(--ink-2); font-style: italic; }
+.withheld ul { margin-top: .7rem; display: grid; gap: .6rem; }
+.withheld q { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--rule); text-decoration-thickness: 1px; }
+.withheld .why { display: block; font-size: var(--f-14); font-style: italic; color: var(--gilt); }
+.sources { max-width: 44rem; margin: 3rem auto 0; }
+.sources ol { display: grid; gap: 1.3rem; }
+.sources li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .8rem; padding: .3rem .4rem; transition: background-color .9s; }
+.sources li.lit { background: color-mix(in srgb, var(--mark) 45%, transparent); transition: none; }
+.sources li.unused { opacity: .62; }
+.sources .num { font: 400 var(--f-24)/1 var(--pica); color: var(--gilt); text-align: right; padding-top: .1rem; }
+.sources h3 { font: 400 var(--f-20)/1.25 var(--pica); text-wrap: balance; overflow-wrap: anywhere; }
+.sources h3 a { text-decoration: none; }
+.sources h3 a:hover { color: var(--accent); font-style: italic; }
+.src-note { margin-top: .45rem; font-size: var(--f-16); line-height: 1.45; border-left: 3px solid var(--gilt); padding-left: .8rem; }
+.src-note strong { font-weight: 400; font-variant-caps: all-small-caps; letter-spacing: .08em; color: var(--gilt); }
+.src-flag { margin-top: .35rem; font-size: var(--f-14); font-style: italic; color: var(--ink-2); }
+.sources details { margin-top: .4rem; }
+.sources summary { cursor: pointer; font-size: var(--f-16); color: var(--ink-2); font-style: italic; }
+.sources .passage { margin: .6rem 0 .5rem; font-size: var(--f-16); line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; color: var(--ink); }
+@media (max-width: 620px) {
+  .ask-answer { grid-template-columns: 1fr; }
+  .ask-actions .btn { flex: 1; }
+  .answer > p { font-size: var(--f-18); }
+}
+@media (prefers-reduced-motion: reduce) { .sources li { transition: none; } }
 .earlier { max-width: 40rem; margin: 3.5rem auto 0; }
 .earlier li { padding: .3rem 0; }
 .earlier button { text-align: left; }

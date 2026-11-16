@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import html
+import json
 import re
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -15,14 +17,21 @@ from .server import STATIC, Library, context_note, memorial
 _MARK = re.compile(r"\[([^\[\]]{1,200})\]")
 
 
-def create_app(database_path: str | Path, blob_root: str | Path, state_root: str | Path) -> Any:
+def create_app(database_path: str | Path, blob_root: str | Path, state_root: str | Path,
+               *, writer: Any = None) -> Any:
     from fastapi import FastAPI, HTTPException, Query
-    from fastapi.responses import FileResponse, JSONResponse
+    from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
     from fastapi.staticfiles import StaticFiles
 
     database = Database(database_path)
     database.require_current()
     library = Library(database, Path(blob_root), Path(state_root))
+    answer_lock = threading.Lock()  # one answer at a time: the GPU holds one model well
+
+    def answer_writer() -> Any:
+        from ..answer import OllamaWriter
+
+        return writer if writer is not None else OllamaWriter()
     app = FastAPI(title="AKI reading room", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
@@ -297,6 +306,74 @@ def create_app(database_path: str | Path, blob_root: str | Path, state_root: str
             "contested": report["contested_claims"], "ok": report["ok"],
         }
 
+    # ------------------------------------------------------------ cited answers
+    @app.get("/api/answer/models")
+    def answer_models() -> Any:
+        from ..answer import WriterUnavailable, model_choices
+
+        try:
+            status = answer_writer().status()
+        except WriterUnavailable as exc:
+            status = {"running": False, "models": {}, "reason": str(exc)}
+        installed = status.get("models", {})
+        return {
+            "running": bool(status.get("running")), "reason": status.get("reason"),
+            "models": [{"depth": c.depth, "model": c.model, "label": c.label, "note": c.note,
+                        "installed": c.model in installed}
+                       for c in model_choices().values()],
+        }
+
+    @app.post("/api/answer")
+    def answer_route(payload: dict[str, Any]) -> Any:
+        """Gather, write, check: streamed as one JSON object per line.
+
+        Only progress is streamed. The model's draft is never shown before it is checked.
+        """
+        from ..answer import answer_question, iter_events
+
+        question = str(payload.get("question", "")).strip()
+        depth = str(payload.get("depth", "quick"))
+        if len(question) > 400:
+            raise HTTPException(400, "Keep the question under 400 characters.")
+        if answer_lock.locked():
+            raise HTTPException(409, "Another answer is being written. Wait for it to finish.")
+        editions = library.editions()
+        research_editions = research_ok() & set(editions)
+        meaning = None
+        try:
+            from ..semantic import SemanticUnavailable, load_index
+
+            index = load_index(state_root)
+            meaning = lambda text, n: index.query(text, limit=n)  # noqa: E731
+        except (SemanticUnavailable, ImportError):
+            meaning = None
+
+        def run(emit: Any) -> Any:
+            from ..answer import AnswerError
+
+            # Held by the worker, so it is released even if the reader closes the page.
+            if not answer_lock.acquire(blocking=False):
+                raise AnswerError("Another answer is being written. Wait for it to finish.")
+            try:
+                return answer_question(
+                    database, question, depth=depth, writer=answer_writer(),
+                    research_editions=research_editions,
+                    embedding_editions=permitted_editions(database, "create_embeddings"),
+                    titles={k: v["title"] for k, v in editions.items()},
+                    notes={k: context_note(v["listed_title"]) for k, v in editions.items()},
+                    meaning=meaning, on_event=emit)
+            finally:
+                answer_lock.release()
+
+        def stream() -> Any:
+            for event in iter_events(run):
+                if event.get("type") == "answer":
+                    event = _answer_view(event, editions)
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+
+        return StreamingResponse(stream(), media_type="application/x-ndjson",
+                                 headers={"Cache-Control": "no-store"})
+
     @app.get("/api/research")
     def research_list() -> Any:
         from ..research import list_cases
@@ -521,6 +598,52 @@ def _book_names(database: Database, edition_id: str, limit: int = 16) -> list[di
             " WHERE ev.edition_id = ? GROUP BY en.id ORDER BY pages DESC, en.canonical_name"
             " LIMIT ?", (edition_id, limit)).fetchall()
     return [dict(row) for row in rows]
+
+
+def _answer_view(answer: dict[str, Any], editions: dict[str, Any]) -> dict[str, Any]:
+    """The checked answer as the reader sees it: kept sentences in paragraphs, then sources.
+
+    A sentence that leans on a book with a curator's note is marked here, whatever the model
+    chose to say about it, so the warning never depends on the model.
+    """
+    from ..answer import strip_citations
+
+    passages = {p["number"]: p for p in answer["passages"]}
+    paragraphs: list[list[dict[str, Any]]] = []
+    last = None
+    for sentence in answer["sentences"]:
+        if not sentence["kept"]:
+            continue
+        if sentence["paragraph"] != last or not paragraphs:
+            paragraphs.append([])
+            last = sentence["paragraph"]
+        cites = [n for n in sentence["cites"] if n in passages]
+        paragraphs[-1].append({
+            "text": strip_citations(sentence["text"]),
+            "cites": cites,
+            "noted": any(passages[n]["note"] for n in cites),
+        })
+    sources = []
+    for p in answer["passages"]:
+        edition = editions.get(p["edition_id"], {})
+        sources.append({
+            "number": p["number"], "page_id": p["page_id"], "page_index": p["page_index"],
+            "page_label": p["page_label"], "evidence_id": p["evidence_id"], "text": p["text"],
+            "uncertain_reading": p["uncertain_reading"], "note": p["note"],
+            "found_by": list(p["found_by"]),
+            "cited": any(p["number"] in s["cites"] for para in paragraphs for s in para),
+            "book": {"id": p["edition_id"], "title": p["book_title"],
+                     "author": edition.get("author"), "noted": bool(p["note"])},
+        })
+    return {
+        "type": "answer", "case_id": answer["case_id"], "question": answer["question"],
+        "depth": answer["depth"], "model": answer["model"], "model_label": answer["model_label"],
+        "answered": answer["answered"], "paragraphs": paragraphs, "sources": sources,
+        "withheld": [{"text": s["text"], "reason": s["reason"]}
+                     for s in answer["sentences"] if not s["kept"]],
+        "kept": answer["kept"], "seconds": answer["seconds"],
+        "tokens_per_second": answer["tokens_per_second"], "warnings": answer["warnings"],
+    }
 
 
 def _marked(snippet: str) -> str:

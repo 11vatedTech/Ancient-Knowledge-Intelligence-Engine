@@ -1,5 +1,9 @@
 [
   {
+    "title_contains": ["watchers", "angels", "enoch", "giants", "demons"],
+    "note": "This is not an old text. It is a saved conversation with Grok 3, an AI chatbot, from August 2026, in which a reader asked it to explain the Book of Enoch. Its pages are the chatbot's words, not Enoch's. It is kept because The Holy Word lists it, but it should not be read as a source."
+  },
+  {
     "title_contains": ["protocols", "elders", "zion"],
     "note": "This text is a forgery. It was fabricated in the Russian Empire and first printed in 1903, and it falsely claims to record a Jewish plan to rule the world. In 1921 The Times of London showed that much of it was copied from an 1864 French satire that has nothing to do with Jewish people. It was later used to justify persecution and mass murder. The Holy Word lists it among its books, so it is kept here as a historical document. It is not a true account of anything."
   }

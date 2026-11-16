@@ -8,9 +8,10 @@
 - **Reading room**: `Open the reading room.cmd` (loopback only). Library, reader with
   side-notes, search by words and meaning, index, chart of shared names, plates,
   cited research, Joe's memorial, colophon. Design canon: `docs/design/VISUAL-CANON.md`.
-- **Verification**: `pytest` (144 pass), `Test the launchers.cmd` (12/12),
-  `scripts/room_walk.py --base http://127.0.0.1:8765` (43/43 on the real archive).
-- **Decisions**: `docs/execution/DECISION_LOG.md` ADR-016 to ADR-029.
+- **Verification**: `pytest` (163 pass), `Test the launchers.cmd` (12/12),
+  `scripts/room_walk.py --base http://127.0.0.1:8765` (49/49 on the real archive, including
+  live answers on desktop and phone; run it with the system Python, which has Playwright).
+- **Decisions**: `docs/execution/DECISION_LOG.md` ADR-016 to ADR-031.
 - **Commits**: `2f9e536` (code, docs), `748264c` (Library). Not pushed.
 
 ## Open items
@@ -33,10 +34,10 @@ What exists is retrieval and evidence: lexical + meaning search, a curated
 concordance, co-occurrence, and research that gathers cited passages but writes no prose.
 What the vision asks for next, in order of value per effort:
 
-1. **Cited answers** — a language model reads the research packet (already gathered
-   and verified per page) and writes an answer in which every sentence carries a
-   page citation; the existing verifier rejects any sentence it cannot match to a
-   cited page. Model choice: local first (privacy, rights), Claude API optional.
+1. **Cited answers — built (ADR-031).** Research page: "Answer" (Qwen 3.5 9B) and
+   "Think harder" (Gemma 4 26B), both local through Ollama. Every sentence is checked
+   against the page it cites and withheld if it fails; the run, the passages and each
+   sentence are recorded as a case, a model run, evidence and claims. Not committed yet.
 2. **Comparing sources** — the same packet grouped by book, so the model can say where
    books agree, differ or contradict each other, always quoting.
 3. **Entity extraction beyond the curated list** — proposed people, places and works,
@@ -45,6 +46,10 @@ What the vision asks for next, in order of value per effort:
    `visual_observations` marked as machine description.
 5. **OCR quality** — re-read low-confidence pages (black-letter) with a stronger
    engine; measure CER on a hand-checked sample.
+
+Known limit of step 1: the checker proves a sentence is made from its page's words, not
+that it keeps the page's sense (one kept sentence reversed a negation). Step 2 could add a
+second, independent check of sense.
 
 Rules that carry over: everything cites a page; machine work is labelled as such;
 rights are checked at read time; nothing leaves this computer unless the owner says so.

@@ -178,7 +178,7 @@ async function viewHome() {
     ["index", "The Index", "People, places, books and ideas, and every page that names them.", overview.concordance.entities ? plural(overview.concordance.entities, "entry", "entries") : "not yet built"],
     ["chart", "The Chart", "Which names keep company on the same pages.", overview.concordance.mentions ? `${fmt(overview.concordance.mentions)} mentions` : "not yet built"],
     ["plates", "The Plates", "Engravings, maps, seals and diagrams.", overview.plates ? plural(overview.plates, "plate") : "not yet found"],
-    ["research", "Research", "Ask a question; the archive gathers the pages and cites each one.", "cited to the page"],
+    ["research", "Research", "Ask a question; a model on this computer answers from the pages, every sentence cited and checked.", "cited to the page"],
     ["joe", "Joe Felz", "The man this room is kept open for.", esc(memorial.years)],
   ];
 
@@ -823,11 +823,16 @@ async function viewResearch(params) {
   earlier = earlier.filter((c) => c.question && !seen.has(c.question) && seen.add(c.question)).slice(0, 8);
   const asked = params.get("q") || "";
   render(`<div class="page">
-    ${pageHead("Evidence, gathered and cited", "Research", `Ask a question and the archive gathers the pages that bear on it, each one cited to its page and checked against the archive. It quotes the books. It does not write conclusions for them.`)}
-    <form class="ask" id="research-form">
+    ${pageHead("Answers, cited to the page", "Research", `Ask a question. A language model on this computer reads the pages the archive gathers and answers from them alone. Every sentence is checked against the page it cites, and any sentence that fails is withheld.`)}
+    <form class="ask ask-answer" id="research-form">
       <div><label class="sr" for="question">Your question</label>
       <input class="line-input" id="question" maxlength="400" value="${esc(asked)}" placeholder="What do these books say about the Watchers?" autocomplete="off"></div>
-      <button class="btn btn-primary" type="submit">Gather the pages</button>
+      <div class="ask-actions">
+        <button class="btn btn-primary" type="submit" data-depth="quick" id="ask-quick">Answer</button>
+        <button class="btn" type="button" data-depth="deep" id="ask-deep">Think harder</button>
+      </div>
+      <p class="ask-models" id="ask-models"></p>
+      <button class="text-btn ask-gather" type="button" id="ask-gather">Only gather the pages, without an answer</button>
     </form>
     <div id="research-out"></div>
     ${earlier.length ? `<section class="earlier" aria-labelledby="earlier"><div class="center-head"><h2 class="sub" id="earlier">Asked before</h2></div>
@@ -835,6 +840,121 @@ async function viewResearch(params) {
   </div>`, "Research");
   const out = document.getElementById("research-out");
   const field = document.getElementById("question");
+  const buttons = { quick: document.getElementById("ask-quick"), deep: document.getElementById("ask-deep") };
+  let models = null;
+  api("/api/answer/models", { fresh: true }).then((m) => {
+    models = m;
+    const line = document.getElementById("ask-models");
+    if (!line) return;
+    const by = Object.fromEntries(m.models.map((x) => [x.depth, x]));
+    for (const [depth, button] of Object.entries(buttons)) {
+      const choice = by[depth];
+      const ready = m.running && choice?.installed;
+      button.disabled = !ready;
+      button.title = choice ? `${choice.label}. ${choice.note}` : "";
+    }
+    line.innerHTML = !m.running
+      ? `The local model service (Ollama) is not running, so answers cannot be written. Start it and reload; gathering the pages still works.`
+      : m.models.map((x) => `<span>${esc(x.depth === "quick" ? "Answer" : "Think harder")}: ${esc(x.label)}${x.installed ? "" : ` <em>(not installed: <code>ollama pull ${esc(x.model)}</code>)</em>`}</span>`).join(" · ")
+        + ` <span class="muted">· runs on this computer; nothing is sent away</span>`;
+  }).catch(() => { /* the buttons stay usable; the server will explain */ });
+
+  const answer = async (question, depth) => {
+    if (question.length < 8) { out.innerHTML = `<p class="tally" style="margin-top:2rem">Write a question of at least a few words.</p>`; return; }
+    const started = routeSeq;
+    const label = models?.models.find((m) => m.depth === depth)?.label || "The model";
+    const t0 = performance.now();
+    let stage = "Gathering the pages…";
+    const draw = () => {
+      if (started !== routeSeq) return;
+      const secs = Math.round((performance.now() - t0) / 1000);
+      out.innerHTML = `<p class="loading answer-stage" role="status">${esc(stage)}<small>${secs ? `${secs} s` : ""}</small></p>`;
+    };
+    draw();
+    const tick = setInterval(draw, 1000);
+    Object.values(buttons).forEach((b) => { b.dataset.wasDisabled = b.disabled; b.disabled = true; });
+    try {
+      const response = await fetch("/api/answer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, depth }),
+      });
+      if (!response.ok) {
+        let detail = `The reading room answered ${response.status}.`;
+        try { detail = (await response.json()).detail || detail; } catch { /* keep default */ }
+        throw new Error(detail);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result = null;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let cut;
+        while ((cut = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, cut).trim();
+          buffer = buffer.slice(cut + 1);
+          if (!line) continue;
+          const event = JSON.parse(line);
+          if (event.type === "passages") stage = event.count ? `Found ${plural(event.count, "passage")} in ${plural(event.books, "book")}. ${label} is reading them…` : "No page bears on this question.";
+          else if (event.type === "progress") stage = `${label} is writing, about ${plural(event.words, "word")} so far…`;
+          else if (event.type === "stage" && event.stage === "checking") stage = "Checking every sentence against the page it cites…";
+          else if (event.type === "error") throw new Error(event.detail);
+          else if (event.type === "answer") result = event;
+        }
+      }
+      clearInterval(tick);
+      if (started !== routeSeq) return;
+      if (!result) throw new Error("The answer ended before it was finished. Ask again.");
+      showAnswer(result);
+    } catch (error) {
+      clearInterval(tick);
+      if (started === routeSeq) out.innerHTML = `<div class="note">${esc(error.message)}</div>`;
+    } finally {
+      Object.values(buttons).forEach((b) => { b.disabled = b.dataset.wasDisabled === "true"; });
+    }
+  };
+
+  const showAnswer = (r) => {
+    const cited = r.sources.filter((s) => s.cited);
+    const books = new Set(cited.map((s) => s.book.id));
+    const cite = (n) => `<button type="button" class="cite" data-src="${n}" aria-label="Passage ${n}">${n}</button>`;
+    const body = r.paragraphs.map((para) => `<p>${para.map((s) => `<span class="said${s.noted ? " leans-on-note" : ""}">${esc(s.text)}${s.cites.length ? `<sup>${s.cites.map(cite).join("")}</sup>` : ""}${s.noted ? `<span class="noted-mark" title="This sentence draws on a book with a curator's note; read the note under its passage.">†</span>` : ""}</span>`).join(" ")}</p>`).join("");
+    const withheld = r.withheld.length ? `<details class="withheld"><summary>${plural(r.withheld.length, "sentence")} withheld: the model wrote ${r.withheld.length === 1 ? "it" : "them"}, but the check could not find ${r.withheld.length === 1 ? "it" : "them"} on the cited page</summary>
+        <ul>${r.withheld.map((w) => `<li><q>${esc(w.text)}</q> <span class="why">${esc(w.reason)}</span></li>`).join("")}</ul></details>` : "";
+    out.innerHTML = `
+      <article class="answer paper" aria-labelledby="answer-head">
+        <h2 class="sr" id="answer-head">The answer</h2>
+        ${r.answered ? body : `<p class="verdict">${r.sources.length ? "The passages the archive found do not answer this question." : "No page in the library bears on this question."}<small>This is a gap in what was found, not a finding about the past.</small></p>`}
+        <p class="answer-colophon">Written by ${esc(r.model_label)} on this computer${r.seconds ? ` in ${fmt(Math.round(r.seconds))} s` : ""}, from ${plural(r.sources.length, "passage")}${r.answered ? `; ${plural(cited.length, "passage")} in ${plural(books.size, "book")} cited` : ""}.
+          Each sentence was checked against its page: its names, numbers and quotations must be there, and most of its words.
+          The check cannot tell whether a paraphrase keeps the page's sense: read the passages.</p>
+        ${withheld}
+      </article>
+      <section class="sources" aria-labelledby="sources-head">
+        <div class="center-head"><h2 class="sub" id="sources-head">The passages</h2></div>
+        <ol>${r.sources.map((s) => `<li id="src-${s.number}" class="${s.cited ? "" : "unused"}">
+          <span class="num">${s.number}</span>
+          <div><h3><a href="${bookHref(s.book.id, s.page_index)}">${esc(s.book.title)}</a>, <a href="${bookHref(s.book.id, s.page_index)}">page ${esc(s.page_label)}</a>${s.cited ? "" : ` <span class="muted it">not cited</span>`}</h3>
+          ${s.note ? `<p class="src-note"><strong>Curator's note.</strong> ${esc(s.note)}</p>` : ""}
+          ${s.uncertain_reading ? `<p class="src-flag">Read by a machine from old print; some words may be misread. Compare the page image.</p>` : ""}
+          <details><summary>The passage the model read</summary><p class="passage">${esc(s.text)}</p>
+            <button class="text-btn" type="button" data-copy="${esc(s.evidence_id)}">Copy evidence id</button></details></div>
+        </li>`).join("")}</ol>
+      </section>`;
+    out.querySelectorAll(".cite").forEach((b) => b.addEventListener("click", () => {
+      const target = document.getElementById(`src-${b.dataset.src}`);
+      if (!target) return;
+      target.querySelector("details").open = true;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.remove("lit"); void target.offsetWidth; target.classList.add("lit");
+    }));
+    out.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+      await copy(b.dataset.copy); toast("Evidence id copied");
+    }));
+  };
+
   const ask = async (question) => {
     if (question.length < 8) { out.innerHTML = `<p class="tally" style="margin-top:2rem">Write a question of at least a few words.</p>`; return; }
     out.innerHTML = `<p class="loading">Gathering the pages and checking each citation…</p>`;
@@ -858,9 +978,16 @@ async function viewResearch(params) {
             <p>${f.snippet}</p></li>`).join("")}</ul></section>`).join("")}</div>`;
     } catch (error) { out.innerHTML = `<div class="note">${esc(error.message)}</div>`; }
   };
-  document.getElementById("research-form").addEventListener("submit", (event) => { event.preventDefault(); ask(field.value.trim()); });
+  const canAnswer = () => !buttons.quick.disabled;
+  document.getElementById("research-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (canAnswer()) answer(field.value.trim(), "quick"); else ask(field.value.trim());
+  });
+  buttons.deep.addEventListener("click", () => answer(field.value.trim(), "deep"));
+  document.getElementById("ask-gather").addEventListener("click", () => ask(field.value.trim()));
   main.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => {
-    field.value = b.dataset.q; window.scrollTo({ top: 0 }); ask(b.dataset.q);
+    field.value = b.dataset.q; window.scrollTo({ top: 0 });
+    if (canAnswer()) answer(b.dataset.q, "quick"); else ask(b.dataset.q);
   }));
   if (asked) ask(asked);
 }

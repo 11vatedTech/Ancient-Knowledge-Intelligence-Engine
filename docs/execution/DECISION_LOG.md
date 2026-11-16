@@ -284,3 +284,21 @@ Architecture decision records for this implementation pass. Each records context
 
 **Consequence.** On 16 November 2026 the run finished: 257 of 257 books readable, 59,907 pages, 58,832 with text, 755 plates, 87,900 index mentions, integrity `ok`, every original verified against its fingerprint. Every passage, chunk, transcription and mention resolves to a page, and every page image is in the vault. Two pages have no transcription (blank pages for which the engine returned no text).
 
+## ADR-030 — Local, free models for the intelligence layer
+
+**Context.** The owner requires the intelligence layer to be entirely free to use. The machine has an RTX 5070 Ti Laptop GPU with 12 GB, 32 GB of RAM and Ollama 0.40.16 already installed.
+
+**Decision.** Main model: `qwen3.5:9b` (Q4_K_M, 6.6 GB, Apache 2.0 as shown by `ollama show`), which runs entirely on the GPU. "Think harder" model: `gemma4:26b` (mixture of experts, Q4_K_M, 18 GB, Apache 2.0), which spills from the GPU into system memory. The meaning-search model (`potion-retrieval-32M`) is unchanged. Abliterated variants are not used: removing a model's refusals works against an archive whose answers must stay inside their sources.
+
+**Measured on the real archive (16 November 2026)**, question "What did the Watchers teach mankind?", six cited passages of about 1,400 characters, temperature 0.2, thinking off:
+
+| | Qwen 3.5 9B | Gemma 4 26B |
+|---|---|---|
+| Speed | 51–59 tokens/s | 8.8 tokens/s |
+| Time to answer | 2.7 s (model loaded) | 117 s (including first load) |
+| Every sentence supported by its cited page | yes | yes |
+
+Given 30-word search snippets instead of passages, Qwen correctly said the sources did not answer the question. The research layer must therefore hand the model whole passages, not snippets.
+
+**Consequence.** Cited answers are feasible locally at no cost. Two findings carry into the build: answers need passage-length context, and some listed "books" are themselves AI-generated text (one begins "Grok 3 Raw"), which answers should disclose.
+

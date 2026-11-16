@@ -24,6 +24,11 @@
 
 ## Next: the intelligence layer (the original vision)
 
+**Models chosen and installed (ADR-030):** `qwen3.5:9b` as the main model (about 55 tokens/s, on the GPU)
+and `gemma4:26b` as "think harder" (about 9 tokens/s). Both are Apache 2.0 and run through the local
+Ollama. Both answered a test question with every sentence supported by its cited page. The research
+layer must pass whole passages (about 1,400 characters), not snippets.
+
 What exists is retrieval and evidence: lexical + meaning search, a curated
 concordance, co-occurrence, and research that gathers cited passages but writes no prose.
 What the vision asks for next, in order of value per effort:

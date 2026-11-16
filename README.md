@@ -46,7 +46,7 @@ HTR and layout segmentation, page regions, vision-language plate descriptions, e
 
 All **257** records of The Holy Word's public catalog were enumerated, imported idempotently, and **acquired**: every edition holds an archived, SHA-256-verified asset — 2.84 GiB across PDF, EPUB-derived ZIP, PNG and JPEG, with zero outstanding failures and zero integrity violations.
 
-Acquisition ran under a **self-attested permission** recorded at [`docs/execution/PERMISSION_ATTESTATION.md`](docs/execution/PERMISSION_ATTESTATION.md), which states plainly that it is an assertion by the claimant rather than an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
+Acquisition ran under a **self-attested permission** recorded at [`docs/execution/PERMISSION_ATTESTATION_PUBLIC.md`](docs/execution/PERMISSION_ATTESTATION_PUBLIC.md) (a public copy with one name withheld), which states plainly that it is an assertion by the claimant rather than an independently verified licence. Export, redistribution, third-party sharing, commercial use and fine-tuning remain denied.
 
 Ingestion renders each page, uses the embedded text layer where one exists, and falls back to OCR for scanned pages. `aki ocr providers` reports what is available; `aki ingest-batch --ocr` runs the whole corpus in one resumable pass.
 
@@ -165,5 +165,10 @@ Full detail: [`docs/execution/DEPLOYMENT_RUNBOOK.md`](docs/execution/DEPLOYMENT_
 - **No fabricated capability:** every subsystem is either measured and tested, or listed as absent.
 
 See `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/RIGHTS_AND_PROVENANCE.md`, and `docs/execution/`.
+
+## Licence
+
+Proprietary; all rights reserved (see [`LICENSE`](LICENSE)). Viewing this repository gives no
+right to copy, modify or use the software, and no right to any book of the collection.
 
 AKI is a research and archival tool, not an authority that settles historical disputes. Similar motifs, words, or cosmological descriptions do not by themselves establish contact, borrowing, or shared origin.

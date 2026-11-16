@@ -3,8 +3,8 @@
 **Source:** https://theholyword.net/
 **Census and acquisition date:** 2026-11-12
 **Method:** anonymous read of the public catalog listing the site serves to unauthenticated visitors, enumerated by row range; objects then fetched one at a time with a 1 request/second floor, size ceiling, SSRF guard and content sniffing.
-**Snapshot:** `data/holyword/inventory_snapshot.json` (committed)
-**Rights basis:** `docs/execution/PERMISSION_ATTESTATION.md` (self-attested, see below)
+**Snapshot:** `data/holyword/inventory_snapshot.json` (kept on the owner's computer; not published)
+**Rights basis:** `docs/execution/PERMISSION_ATTESTATION_PUBLIC.md` (self-attested, see below)
 
 ---
 

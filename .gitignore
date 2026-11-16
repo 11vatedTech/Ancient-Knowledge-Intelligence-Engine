@@ -16,9 +16,17 @@ data/holyword/books_raw.json
 *.sqlite3-shm
 
 # The books themselves never enter git. The corpus permission covers reading and research
-# on this computer only; redistribution is denied (docs/execution/PERMISSION_ATTESTATION.md).
+# on this computer only; redistribution is denied (docs/execution/PERMISSION_ATTESTATION_PUBLIC.md).
 Library/
 
 # Machine-local: the archive home written by `aki relocate`, and launcher test runs
 aki.config.json
 test-results/
+
+# Records about the collection itself stay with the archive, not in a shared repository:
+# the original permission record (the archive cites this path as evidence; a redacted public
+# copy is PERMISSION_ATTESTATION_PUBLIC.md), the per-book census and the per-file audit.
+docs/execution/PERMISSION_ATTESTATION.md
+data/holyword/inventory_snapshot.json
+docs/execution/LIBRARY_RETROSPECTIVE_AUDIT.csv
+research/THE_HOLY_WORD_CATALOG_SNAPSHOT.md

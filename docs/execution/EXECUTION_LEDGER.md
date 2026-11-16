@@ -52,7 +52,7 @@
 | Immutable object vault | `.aki/blobs/sha256/` (gitignored) |
 | Dossiers | `.aki/dossiers/` |
 | Backups | `.aki/backups/` |
-| Catalog census snapshot | `data/holyword/inventory_snapshot.json` (committed) |
+| Catalog census snapshot | `data/holyword/inventory_snapshot.json` (kept on the owner's computer; not published) |
 | Catalog credentials | `.aki/holyword.json` (gitignored, never committed) |
 
 ---

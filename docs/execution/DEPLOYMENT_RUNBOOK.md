@@ -213,5 +213,5 @@ Restore refuses without `-Confirm`, validates the backup's integrity before touc
 | Dossiers | `.aki/dossiers/` | no |
 | Backups | `.aki/backups/` | no |
 | Catalog credentials | `.aki/holyword.json` | no |
-| Census snapshot | `data/holyword/inventory_snapshot.json` | yes |
+| Census snapshot | `data/holyword/inventory_snapshot.json` | no: kept on the owner's computer |
 | Raw listing cache | `data/holyword/books_raw.json` | no |

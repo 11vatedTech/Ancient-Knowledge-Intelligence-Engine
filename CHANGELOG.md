@@ -29,6 +29,10 @@ The corpus is read, the reading room is complete, and the intelligence layer beg
   found by installing from a clean checkout.
 
 ### Repository
+- `LICENSE`: proprietary, all rights reserved; the bundled fonts keep the SIL OFL 1.1.
+- Records about the collection itself stay with the archive and are not published: the
+  per-book census, the per-file library audit, the catalog snapshot, and the original
+  permission record. A redacted public copy is `PERMISSION_ATTESTATION_PUBLIC.md`.
 - The books (`Library/`), the archive, `aki.config.json` and launcher test runs are machine
   local and ignored by git. The corpus permission denies redistribution.
 

@@ -14,6 +14,8 @@
 - **Decisions**: `docs/execution/DECISION_LOG.md` ADR-016 to ADR-031.
 - **Release**: v0.2.0 (`CHANGELOG.md`). The shared repository holds the engine only; the
   books stay in `Library/` and `C:\AKI` on this computer and are ignored by git.
+  Records naming the books (census, library audit, catalog snapshot, original permission
+  record) also stay here; backups in `C:\AKI\records`. Licence: proprietary (`LICENSE`).
 
 ## Open items
 

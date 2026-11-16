@@ -2,7 +2,8 @@
 
 **Audited:** 2026-11-14 (read-only; no file or database row was changed)
 **Scope:** every file under `Library/` that existed before the rights-gated export (ADR-016).
-**Per-file record:** `LIBRARY_RETROSPECTIVE_AUDIT.csv` (one row per file and edition).
+**Per-file record:** `LIBRARY_RETROSPECTIVE_AUDIT.csv` (one row per file and edition), kept on the
+owner's computer with the archive; it names each book and is not published.
 
 ## Method
 

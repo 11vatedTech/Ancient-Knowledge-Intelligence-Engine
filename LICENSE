@@ -1,0 +1,21 @@
+Copyright (c) 2026 11vatedTech. All rights reserved.
+
+This repository contains proprietary software: the source code, tests, schema, scripts,
+design and documentation of the Ancient Knowledge Intelligence Engine (AKI) and the Felz
+Reading Room.
+
+No licence is granted. You may view this repository where it is published, as the hosting
+service's terms allow. You may not copy, modify, distribute, sublicense, or use this
+software, in whole or in part, without prior written permission from 11vatedTech.
+
+This repository does not contain, and gives no rights to, the books of The Holy Word
+library or any text, image or record derived from them. Those are held under a separate,
+limited permission that denies redistribution (docs/execution/PERMISSION_ATTESTATION_PUBLIC.md).
+
+Third-party components keep their own licences:
+- EB Garamond and IM Fell fonts in src/aki/app/static/fonts/: SIL Open Font License 1.1
+  (OFL-EBGaramond.txt, OFL-IMFell.txt in that folder).
+- Python dependencies installed from PyPI, and the language models used at run time
+  through Ollama, are not included here and are governed by their own licences.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.

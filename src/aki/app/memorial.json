@@ -1,0 +1,32 @@
+{
+  "name": "Joe Felz",
+  "full_name": "Joseph Alx Felz",
+  "years": "1986 – 2026",
+  "lede": "He gave away almost everything he owned, moved into a van, and spent his last years saving old books that others wanted forgotten. This room keeps them open.",
+  "his_words": {
+    "text": "Information should be free. Sacred texts belong to everyone.",
+    "source": "Joe Felz, FelzBooks"
+  },
+  "joes_book_note": "The Holy Word pinned this book first. Its listing says it is the one Joe showed them, a copy that sold for $9,000, and several of the shelf's other L. H. Anderson titles are listed as its sisters.",
+  "biography": [
+    "Joe Felz was an electrician, a solar energy consultant, a builder, a real-estate investor and a traveller from Augusta, Georgia. More than a million people followed him online as he shared his off-grid life, his businesses and his faith.",
+    "He started Felz Investment Group in 2011 with a single $19,000 house. In August 2022 he gave away most of what he owned, left a 3,500 square foot house for a 1999 Dodge van, and set out with little more than the first solar generator he had built himself.",
+    "Through Felz Energy Consultants he designed and installed solar systems and wrote his own calculators, aiming to put power in the hands of ordinary people. In Costa Rica he began FelzBooks: rare Bibles, Masonic texts, Judaic manuscripts, maps and illustrations, photographed page by page and made searchable.",
+    "Joe died in August 2026, at 40. His friends kept his sites online, a free solar lab now carries his name, and The Holy Word gathered 257 books for anyone who wants to read them. This reading room is built from that library."
+  ],
+  "timeline": [
+    {"when": "2011", "what": "Founds Felz Investment Group in Augusta, Georgia, starting with one $19,000 house."},
+    {"when": "August 2022", "what": "Gives away most of what he owns and moves into a 1999 Dodge van."},
+    {"when": "Later years", "what": "Runs Felz Energy Consultants and begins FelzBooks in Costa Rica, scanning rare and antique sacred texts."},
+    {"when": "June 2026", "what": "Turns 40."},
+    {"when": "August 2026", "what": "Dies, aged 40."},
+    {"when": "After", "what": "Friends keep his work online; the Joe Felz Memorial Solar Exploration Lab is named for him; The Holy Word shares 257 books."}
+  ],
+  "links": [
+    {"title": "FelzLegacy: Joe Felz, his life and work", "url": "https://felzlegacy.com/"},
+    {"title": "FelzBooks", "url": "https://www.felzbooks.com/about"},
+    {"title": "The Holy Word library", "url": "https://theholyword.net/"},
+    {"title": "HYVE CARES memorial page", "url": "https://www.hyvecares.org/joe"}
+  ],
+  "care_line": "If you are struggling, you don't have to carry it alone. In the US you can call or text 988, any time."
+}

@@ -16,8 +16,13 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install package and development tools
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,room]"
       - name: Lint
-        run: ruff check src tests
+        run: ruff check src tests scripts
       - name: Test with coverage
         run: pytest --cov=aki --cov-report=term-missing
+      - name: Schema smoke test
+        run: |
+          aki init --database .ci/aki.sqlite3
+          aki coverage --database .ci/aki.sqlite3
+          aki verify --database .ci/aki.sqlite3 --blob-root .ci/blobs

@@ -55,6 +55,27 @@ def _sha256_file(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+MIN_FALLBACK_DPI = 72
+
+
+def fitting_dpi(width_points: float, height_points: float, dpi: int, max_pixels: int) -> int | None:
+    """The requested resolution, or the highest lower one at which the page fits the limit.
+
+    Some scans are poster-sized: at 200 dpi a 42x56-inch page is 94 million pixels. Rather
+    than refuse the whole book, such a page is rendered at the resolution that fits; the
+    page records the dpi it was actually rendered at. None if even 72 dpi is too large.
+    """
+    def pixels(at: float) -> float:
+        return round(width_points * at / 72) * round(height_points * at / 72)
+
+    if pixels(dpi) <= max_pixels:
+        return dpi
+    scaled = int(dpi * (max_pixels / pixels(dpi)) ** 0.5)
+    while scaled >= MIN_FALLBACK_DPI and pixels(scaled) > max_pixels:
+        scaled -= 1
+    return scaled if scaled >= MIN_FALLBACK_DPI else None
+
+
 class PDFPageProcessor:
     """Inspect PDFs and store rendered pages as immutable PNG blobs."""
 
@@ -136,15 +157,16 @@ class PDFPageProcessor:
                     page = document.load_page(index)
                     width_points = float(page.rect.width)
                     height_points = float(page.rect.height)
-                    pixel_width = round(width_points * dpi / 72)
-                    pixel_height = round(height_points * dpi / 72)
-                    if pixel_width * pixel_height > self.max_pixels_per_page:
+                    page_dpi = fitting_dpi(width_points, height_points, dpi,
+                                           self.max_pixels_per_page)
+                    if page_dpi is None:
                         raise PDFProcessingError(
-                            f"Page {index + 1} would render to {pixel_width}x{pixel_height} pixels, "
-                            f"exceeding the {self.max_pixels_per_page:,}-pixel limit."
+                            f"Page {index + 1} is {width_points:.0f}x{height_points:.0f} points; "
+                            f"even at {MIN_FALLBACK_DPI} dpi it exceeds the "
+                            f"{self.max_pixels_per_page:,}-pixel limit."
                         )
                     pixmap = page.get_pixmap(
-                        dpi=dpi, colorspace=pymupdf.csRGB, alpha=False, annots=True
+                        dpi=page_dpi, colorspace=pymupdf.csRGB, alpha=False, annots=True
                     )
                     png_bytes = pixmap.tobytes("png")
                     blob: StoredBlob = store.put_bytes(png_bytes)
@@ -160,7 +182,7 @@ class PDFPageProcessor:
                         pixel_height=pixmap.height,
                         page_width_points=width_points,
                         page_height_points=height_points,
-                        dpi=dpi,
+                        dpi=page_dpi,
                         blob_path=str(blob.path),
                         renderer_name="PyMuPDF",
                         renderer_version=str(pymupdf.VersionBind),

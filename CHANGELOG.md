@@ -22,7 +22,11 @@ The corpus is read, the reading room is complete, and the intelligence layer beg
 
 ### Changed
 - CI installs the reading-room extras so its tests run, and lints `scripts/`.
-- New optional extra `ocr` for RapidOCR.
+- New optional extra `ocr`, pinned to RapidOCR 1.2 (the release the corpus was read with).
+
+### Fixed
+- `AKI_OCR_THREADS` no longer fails with RapidOCR releases that lack the 1.2 session hook;
+  found by installing from a clean checkout.
 
 ### Repository
 - The books (`Library/`), the archive, `aki.config.json` and launcher test runs are machine

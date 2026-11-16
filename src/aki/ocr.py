@@ -105,6 +105,10 @@ def _cap_threads() -> None:
         import rapidocr_onnxruntime.utils as rapid_utils
     except Exception:  # noqa: BLE001 - without the library there is nothing to cap
         return
+    if not hasattr(rapid_utils, "SessionOptions"):
+        # Only the 1.2 line builds sessions through this hook (the `ocr` extra pins it).
+        # Other releases are left to choose their own threads rather than fail.
+        return
     base = getattr(rapid_utils.SessionOptions, "_aki_base", onnxruntime.SessionOptions)
 
     def capped() -> Any:

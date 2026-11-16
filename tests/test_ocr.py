@@ -149,6 +149,10 @@ def test_ocr_threads_are_shared_between_workers(monkeypatch):
     assert cli_room.default_workers() == 1
 
     utils = pytest.importorskip("rapidocr_onnxruntime.utils")
+    if not hasattr(utils, "SessionOptions"):
+        monkeypatch.setenv("AKI_OCR_THREADS", "3")
+        _cap_threads()  # a RapidOCR without the hook is left alone, never fatal
+        return
     original = utils.SessionOptions
     try:
         monkeypatch.setenv("AKI_OCR_THREADS", "3")

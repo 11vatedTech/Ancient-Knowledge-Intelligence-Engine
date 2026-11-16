@@ -211,6 +211,11 @@ def ingest_pdf(
     if extract_text_layer:
         text_layer = _extract_text_layer(source)
 
+    if engine is not None and hasattr(engine, "prefetch"):
+        # A pooled engine starts on every page that will need reading before the loop asks.
+        engine.prefetch([page.blob_path for page in rendered
+                         if len(text_layer.get(page.page_number - 1, "").strip()) < ocr_min_chars])
+
     for page in rendered:
         page_id = new_id()
         index = page.page_number - 1

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from aki.db import Database, SchemaError, initialize
+from aki.db import SCHEMA_VERSION, Database, SchemaError, initialize
 from aki.jobs import JobError, JobQueue, JobState, LeaseLost, backoff_delay
 
 
@@ -19,7 +19,7 @@ def database(tmp_path):
 def test_migration_is_idempotent(database):
     report = initialize(database.path)
     assert report["applied"] == []
-    assert report["version_after"] == 2
+    assert report["version_after"] == SCHEMA_VERSION
     assert database.integrity_check()["quick_check"] == "ok"
 
 

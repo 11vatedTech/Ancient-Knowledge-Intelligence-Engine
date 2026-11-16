@@ -67,6 +67,14 @@ class ResearchResult:
 _SPLIT = re.compile(r"[.;?]+\s+|\band\b|\bversus\b|\bvs\.?\b", re.IGNORECASE)
 
 
+_QUESTION_WORDS = frozenset(
+    "what who whom whose which when where why how does did do is are was were the and for"
+    " with that this these those about from into upon say says said tell teach taught any"
+    " there their they them have has had can could would should will shall not but its"
+    " our your you his her she him".split()
+)
+
+
 def plan_research(question: str, *, filters: SearchFilters | None = None) -> ResearchPlan:
     """Decompose a question into search terms and investigable sub-questions."""
     stripped = question.strip()
@@ -77,9 +85,11 @@ def plan_research(question: str, *, filters: SearchFilters | None = None) -> Res
         dict.fromkeys(
             token.lower()
             for token in re.findall(r"[^\W_]+", stripped, re.UNICODE)
-            if len(token) > 2
+            if len(token) > 2 and token.lower() not in _QUESTION_WORDS
         )
-    )
+    ) or tuple(dict.fromkeys(
+        token.lower() for token in re.findall(r"[^\W_]+", stripped, re.UNICODE) if len(token) > 2
+    ))
     subquestions = tuple(clauses) if len(clauses) > 1 else (
         f"What do the catalogued sources state about: {stripped}?",
     )
@@ -109,7 +119,7 @@ def run_research(
 ) -> ResearchResult:
     database.require_current()
     plan = plan_research(question, filters=filters)
-    hits = search(database, question, filters=filters, limit=limit)
+    hits = search(database, " ".join(plan.terms), filters=filters, limit=limit)
     case_id = new_id()
     with database.transaction() as connection:
         connection.execute(

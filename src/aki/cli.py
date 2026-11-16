@@ -418,7 +418,9 @@ def cmd_ingest_batch(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from .db import utcnow
+    from .power import full_speed
 
+    full_speed()  # a worker has no window, and Windows would otherwise slow it to save power
     database = _database(args)
     pending = pending_editions(database, args.blob_root)
     if args.shard_count > 1:
@@ -432,6 +434,11 @@ def cmd_ingest_batch(args: argparse.Namespace) -> int:
             if int(hashlib.sha256(edition.encode()).hexdigest(), 16) % args.shard_count
             == args.shard_index
         ]
+    if args.editions_file:
+        # A planned share of the work (see cli_room.plan_workers): these books, in this order.
+        wanted = json.loads(Path(args.editions_file).read_text(encoding="utf-8"))
+        by_id = dict(pending)
+        pending = [(edition, by_id[edition]) for edition in wanted if edition in by_id]
     if args.edition_id:
         pending = [(edition, path) for edition, path in pending if edition == args.edition_id]
     if args.limit is not None:
@@ -478,6 +485,8 @@ def cmd_ingest_batch(args: argparse.Namespace) -> int:
             record["finished_at"] = utcnow()
             handle.write(json.dumps(record, sort_keys=True) + "\n")
             handle.flush()
+    if engine is not None and hasattr(engine, "close"):
+        engine.close()  # a pooled reader's processes end with the batch, not at exit
     totals["errors"] = errors[:20]
     totals["elapsed_seconds"] = round(time.time() - started, 1)
     _emit(totals)
@@ -640,8 +649,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="aki", description="Ancient Knowledge Intelligence Engine"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("--database", default=DEFAULT_DATABASE)
-    parser.add_argument("--blob-root", default=DEFAULT_BLOB_ROOT)
+    from .home import resolve_home
+
+    home = resolve_home()
+    parser.add_argument("--database", default=str(home / "aki.sqlite3")
+                        if home.as_posix() != ".aki" else DEFAULT_DATABASE)
+    parser.add_argument("--blob-root", default=str(home / "blobs")
+                        if home.as_posix() != ".aki" else DEFAULT_BLOB_ROOT)
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("init", help="create or upgrade the local database").set_defaults(func=cmd_init)
@@ -748,6 +762,8 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--shard-index", type=int, default=0)
     batch.add_argument("--shard-count", type=int, default=1,
                        help="partition editions across parallel workers by stable hash")
+    batch.add_argument("--editions-file", default=None,
+                       help="JSON list of edition ids to read, in order (a planned share)")
     batch.add_argument("--log", default=".aki/ingest-progress.jsonl")
     batch.set_defaults(func=cmd_ingest_batch)
 
@@ -822,6 +838,10 @@ def build_parser() -> argparse.ArgumentParser:
     restore.add_argument("source")
     restore.add_argument("--confirm", action="store_true")
     restore.set_defaults(func=cmd_restore)
+
+    from .cli_room import register as register_room
+
+    register_room(sub)
 
     # Accept --database/--blob-root after the subcommand as well as before it. The
     # SUPPRESS default keeps a value supplied at the root level from being overwritten.

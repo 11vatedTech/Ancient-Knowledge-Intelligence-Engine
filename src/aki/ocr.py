@@ -83,6 +83,46 @@ def _bbox(points: Sequence[Sequence[float]]) -> tuple[float, float, float, float
     return (min(xs), min(ys), max(xs), max(ys))
 
 
+def _cap_threads() -> None:
+    """Limit this process's OCR threads to ``AKI_OCR_THREADS`` when it is set.
+
+    ONNX Runtime sizes its thread pool to every core by default. One process is fine like
+    that; several side by side each start a full pool and spend their time contending
+    (measured on 24 cores, 14 November 2026: six uncapped workers did not finish 42 pages in
+    ten minutes; the same six capped at four threads finished them in two). RapidOCR 1.2
+    exposes no thread setting, so the session options it builds are wrapped here.
+    """
+    import os
+
+    try:
+        threads = int(os.environ.get("AKI_OCR_THREADS", "0"))
+    except ValueError:
+        threads = 0
+    if threads <= 0:
+        return
+    try:
+        import onnxruntime
+        import rapidocr_onnxruntime.utils as rapid_utils
+    except Exception:  # noqa: BLE001 - without the library there is nothing to cap
+        return
+    base = getattr(rapid_utils.SessionOptions, "_aki_base", onnxruntime.SessionOptions)
+
+    def capped() -> Any:
+        options = base()
+        options.intra_op_num_threads = threads
+        options.inter_op_num_threads = 1
+        return options
+
+    capped._aki_base = base  # type: ignore[attr-defined]
+    rapid_utils.SessionOptions = capped
+    try:
+        import cv2
+
+        cv2.setNumThreads(threads)
+    except Exception:  # noqa: BLE001 - OpenCV threading is an optimisation only
+        pass
+
+
 class RapidOcrProvider:
     """PP-OCR models executed through ONNX Runtime. CPU by default, fully offline.
 
@@ -117,6 +157,7 @@ class RapidOcrProvider:
                 raise OcrUnavailable(
                     f"RapidOCR could not be imported: {type(exc).__name__}: {exc}"
                 ) from exc
+            _cap_threads()
             self._engine = RapidOCR()
         return self._engine
 
@@ -240,6 +281,87 @@ def provider_status() -> list[dict[str, Any]]:
     return report
 
 
+_POOL_ENGINE: Any = None
+
+
+def _pool_start(factory: Any) -> None:
+    """Runs once in each pool process: one engine, one thread, kept for the process's life."""
+    import os
+
+    global _POOL_ENGINE
+    from .power import full_speed
+
+    full_speed()
+    os.environ["AKI_OCR_THREADS"] = "1"
+    os.environ.pop("AKI_OCR_PROCESSES", None)
+    _POOL_ENGINE = factory()
+
+
+def _pool_read(image_path: str) -> OcrPage:
+    return _POOL_ENGINE.ocr(image_path)  # type: ignore[no-any-return]
+
+
+class PooledOcrProvider:
+    """Reads several pages of one book at the same time, each in its own process.
+
+    A dense page costs minutes of processor time, and one engine reads one page at a time
+    however many threads it is given, so a long scanned book used to hold a single core's
+    worth of progress while the rest of the machine idled. Here the pages that need reading
+    are handed out ahead of time to ``processes`` single-threaded engines; ``ocr`` then
+    returns each page's result in the order ingestion asks for it, so everything written to
+    the database is exactly what the serial path would have written.
+    """
+
+    def __init__(self, provider_key: str, processes: int) -> None:
+        from concurrent.futures import Future, ProcessPoolExecutor
+
+        factory = PROVIDERS[provider_key]
+        inner = factory()
+        self.name = inner.name
+        self.version = getattr(inner, "version", "unknown")
+        self.processes = processes
+        self._pool = ProcessPoolExecutor(processes, initializer=_pool_start,
+                                         initargs=(factory,))
+        self._ahead: dict[str, Future[OcrPage]] = {}
+
+    def prefetch(self, image_paths: Sequence[str | Path]) -> None:
+        for image_path in image_paths:
+            key = str(image_path)
+            if key not in self._ahead:
+                self._ahead[key] = self._pool.submit(_pool_read, key)
+
+    def ocr(self, image_path: str | Path) -> OcrPage:
+        ahead = self._ahead.pop(str(image_path), None)
+        if ahead is None:
+            ahead = self._pool.submit(_pool_read, str(image_path))
+        try:
+            return ahead.result()
+        except Exception:  # noqa: BLE001 - one retry, then the page's failure stands
+            # A page can fail for reasons that pass: on 15 November 2026 two books failed
+            # with "ONNXRuntime inference failed" at the same moment the computer ran short
+            # of memory. One more attempt costs a page; giving up costs the whole book.
+            return self._pool.submit(_pool_read, str(image_path)).result()
+
+    def close(self) -> None:
+        for pending in self._ahead.values():
+            pending.cancel()
+        self._ahead.clear()
+        self._pool.shutdown(wait=True, cancel_futures=True)
+
+
+def _pooled(key: str, provider: OcrProvider) -> OcrProvider:
+    """Wrap ``provider`` in a pool when ``AKI_OCR_PROCESSES`` asks for more than one."""
+    import os
+
+    try:
+        processes = int(os.environ.get("AKI_OCR_PROCESSES", "0"))
+    except ValueError:
+        processes = 0
+    if processes > 1:
+        return PooledOcrProvider(key, processes)  # type: ignore[return-value]
+    return provider
+
+
 def resolve_provider(name: str | None = None) -> OcrProvider:
     """Return a working provider, or raise with an actionable message.
 
@@ -255,11 +377,11 @@ def resolve_provider(name: str | None = None) -> OcrProvider:
             )
         if not factory.available():
             raise OcrUnavailable(f"OCR provider {name!r} is not available on this machine")
-        return factory()  # type: ignore[no-any-return]
+        return _pooled(name, factory())
     for key in ("rapidocr", "tesseract"):
         factory = PROVIDERS[key]
         if factory.available():
-            return factory()  # type: ignore[no-any-return]
+            return _pooled(key, factory())
     raise OcrUnavailable(
         "no OCR engine is available; install 'rapidocr-onnxruntime' or put tesseract on PATH"
     )

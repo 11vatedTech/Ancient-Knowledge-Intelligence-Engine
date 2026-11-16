@@ -39,6 +39,55 @@ Acquisition ran under a **self-attested permission** recorded at [`docs/executio
 
 See [`ACQUISITION_REPORT.md`](docs/execution/ACQUISITION_REPORT.md) and [`KNOWN_LIMITATIONS.md`](docs/execution/KNOWN_LIMITATIONS.md) for what is and is not yet true of the processed corpus.
 
+## The Felz Reading Room
+
+A local web interface over the archive, built in memory of Joe Felz. It opens only on this
+computer (127.0.0.1), because the corpus permission covers internal reading and research
+but not sharing.
+
+- **Library and shelves**: all 257 books by shelf, with covers from their first page.
+- **Reader**: the page scan beside its transcription, the engine that produced the text,
+  page-by-page navigation, search inside the book, and a copyable citation.
+- **Search**: exact words (FTS5) and meaning (model2vec `potion-retrieval-32M` when it can be
+  downloaded, otherwise an offline LSA model trained on the corpus itself), fused by rank.
+- **Index**: 235 curated figures, places, scriptures, traditions and ideas, each linked to
+  every page that names it.
+- **Plates**: engravings, maps and diagrams found by measuring each scan.
+- **Research**: cited, verified evidence gathering (no generated conclusions).
+- **The margin**: beside each transcription, the index names on that page and the nearest
+  passages in other books, found by likeness of meaning. Withheld where the machine's
+  reading of the page is too unsure to build on.
+- **Chart**: the index names drawn as a star chart of which names share pages. It shows
+  co-occurrence only; no relationship between two names is claimed.
+- **Joe** and **The Colophon**: his story, and the archive's provenance, rights and light.
+
+The room is lit by the computer's clock: five palettes (dawn, noon, golden hour, dusk,
+night) blended through the day, with a sundial in the head to hold one. The design, its
+reasons and its inspection record are in `docs/design/VISUAL-CANON.md`; `scripts/room_walk.py`
+re-runs that inspection in a real browser. Fonts (EB Garamond,
+IM Fell; SIL OFL 1.1) are bundled, so the room still makes no request beyond this computer.
+
+Double-click **Finish the reading room.cmd**. It runs five steps and stops at the first
+one that fails, without opening the reading room:
+
+1. **Move the archive** out of OneDrive to `C:\AKI` (verified copy; nothing deleted; see ADR-017).
+2. **Library**: readable copies of the originals, rights-checked and audited (ADR-016).
+3. **Finish**: verified backup and vault manifest, then read every remaining book (resumable),
+   build meaning search, the index and the plates.
+4. **Library sync**: copy books the project's `Library/` lacks, for OneDrive to sync.
+5. **Serve**: open the reading room.
+
+Logs, worker logs, backup results and reports are kept under `C:\AKI\logs`. Afterwards,
+**Open the reading room.cmd** opens it directly. The same steps by hand:
+
+```powershell
+.\scripts\aki.ps1 -Command relocate       # -To D:\Somewhere to choose another folder
+.\scripts\aki.ps1 -Command library
+.\scripts\aki.ps1 -Command finish         # -Workers 4 to set parallelism
+.\scripts\aki.ps1 -Command library-sync
+.\scripts\aki.ps1 -Command serve          # http://127.0.0.1:8765/
+```
+
 ## Development
 
 Requires Python 3.11+.

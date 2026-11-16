@@ -1,5 +1,55 @@
 # Known Limitations
 
+> **Update, 13 November 2026.** Several items below are now partly addressed and are
+> qualified here rather than deleted:
+>
+> - **§1, §2:** the 8 non-PDF editions now have an ingestion path (`aki media-ingest`):
+>   images become one OCR'd page using the archived original as the page image; the EPUB is
+>   laid out by PyMuPDF reflow. `aki finish` resumes the remaining PDF editions.
+> - **§3:** plate detection exists as a *measured heuristic* (`aki plates`), recorded as
+>   `model_inference` with its metrics. It finds pictures; it does not describe them. No
+>   vision-language model is installed.
+> - **§4:** a meaning leg exists (`aki semantic build`): model2vec when downloadable, else
+>   corpus-trained LSA. The provider that ran is recorded in `model_runs` and shown in the UI.
+>   Still unmeasured: no gold query set, so no recall/nDCG figure is claimed.
+> - **§7:** the concordance populates `entities`, `entity_aliases` and `mentions` from a curated
+>   term list by exact, case-sensitive token matching. Entities stay `candidate`; "often on the
+>   same page" is co-occurrence, not a typed relationship. `relationships` remains empty.
+> - **§8:** a loopback-only HTTP service and web interface exist (`aki serve`). There is still
+>   no desktop shell, auth token, or SSE stream; it refuses to bind beyond 127.0.0.1.
+> - **§16:** API and pipeline tests exist (`tests/test_reading_room.py`); there is still no
+>   browser end-to-end test or accessibility audit.
+
+> **Update, 16 November 2026: the corpus is read.** All 257 books are open in the reading
+> room: 59,907 pages, 58,832 with text (50,112 from the scans' own text layers, 9,505 read by
+> OCR, 288 from the EPUB), 755 plates, 87,900 index mentions. §1 below no longer applies. The
+> 1560 Geneva Bible and other black-letter books were read by OCR at about 0.78 confidence:
+> their page images are exact, their text is approximate.
+
+> **Update, 14 November 2026.**
+>
+> - **§7:** the reading room now shows co-occurrence two more ways: a chart of index names
+>   that share pages, and a margin of near passages in other books. Both are labelled as
+>   such. `relationships` is still empty; nothing extracts typed relations or claims.
+> - **§6:** unchanged. Research still assembles and cites evidence; it writes no prose.
+> - **§2:** pages whose OCR confidence is below 0.80 are marked "read by machine, unsurely"
+>   in the reader and are kept out of the margin's comparisons, both as the page being read
+>   and as a passage offered from another book. They are still in the search index, so
+>   black-letter and rotated pages still produce noisy search hits.
+> - **§16:** the interface was inspected as rendered pages in Edge at desktop and phone
+>   widths (`docs/design/VISUAL-CANON.md`). There is still no automated browser test, no
+>   screen-reader pass and no measured contrast audit of the blended light states.
+> - **Rights at read time:** the index, the chart, index entries, book name lists and
+>   research findings are counted only over editions that currently hold `internal_research`;
+>   the margin also requires `create_embeddings`. Still not re-checked at read time: meaning
+>   search results against `create_embeddings` (a withdrawn grant lingers until the index is
+>   rebuilt), and the full page image, which needs `internal_search` but not `render_pages`.
+>   The colophon shows the single most recent rights decision as if it covered every book.
+> - **The light** follows the computer's clock and assumes a northern year. It does not know
+>   the reader's latitude, so its sunrise and sunset are approximate by design.
+> - **The frontispiece** on the home page is drawn from machine-found plates; some are
+>   modern covers or blank leaves.
+
 Every item here is a capability that does **not** exist or is **not** proven. Nothing in this file is implemented; nothing implemented is concealed here.
 
 ---

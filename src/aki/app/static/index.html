@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Felz Reading Room</title>
+<meta name="description" content="A reading room for the books of The Holy Word, kept open in memory of Joe Felz.">
+<meta name="theme-color" content="#F4EEE3">
+<link rel="icon" href="/sun.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/EBGaramond.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/IMFellFrenchCanon.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the page</a>
+<header class="head">
+  <nav class="nav" aria-label="Sections">
+    <a href="#/library" data-nav="library">Library</a>
+    <a href="#/search" data-nav="search">Search</a>
+    <a href="#/index" data-nav="index">Index</a>
+    <a href="#/chart" data-nav="chart">Chart</a>
+    <a href="#/plates" data-nav="plates">Plates</a>
+    <a href="#/research" data-nav="research">Research</a>
+    <a href="#/joe" data-nav="joe">Joe</a>
+  </nav>
+  <a class="mark" href="#/" aria-label="The Felz Reading Room, title page">
+    <span id="mark-device"></span>
+    <span class="mark-name">The Felz Reading Room</span>
+  </a>
+  <div class="head-tools">
+    <form class="head-search" role="search" id="head-search">
+      <label class="sr" for="head-q">Search every page</label>
+      <input id="head-q" name="q" type="search" placeholder="Search every page" autocomplete="off">
+      <kbd class="key" aria-hidden="true">/</kbd>
+    </form>
+    <div class="dial">
+      <button class="dial-btn" id="dial-btn" type="button" aria-expanded="false" aria-controls="dial-menu">
+        <span id="dial-device"></span><span id="dial-label">Noon</span>
+      </button>
+      <div class="dial-menu" id="dial-menu" role="group" aria-label="The light of the room" hidden></div>
+    </div>
+  </div>
+</header>
+<main id="main" tabindex="-1"></main>
+<footer class="foot">
+  <div id="foot-rule"></div>
+  <p>Kept open in memory of Joe Felz. Every page here comes from The Holy Word library and stays on this computer.</p>
+  <p><a href="#/archive">The colophon: how this archive works</a></p>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

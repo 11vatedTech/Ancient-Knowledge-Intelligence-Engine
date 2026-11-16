@@ -1,0 +1,8 @@
+# Books, scans and fonts are stored exactly as they are: never rewrite their line endings.
+*.pdf   binary
+*.jpg   binary
+*.jpeg  binary
+*.png   binary
+*.zip   binary
+*.epub  binary
+*.woff2 binary

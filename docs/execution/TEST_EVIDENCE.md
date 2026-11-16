@@ -254,6 +254,10 @@ is therefore CPU-limited at roughly 6 s per scanned page.
 
 ### Worker count — measured, no gain
 
+> **Corrected 14 November 2026 (ADR-026).** The figures below are real, but the cause was
+> thread oversubscription, not a ceiling: every worker started a full-size ONNX Runtime
+> thread pool. With threads capped per worker, workers do scale.
+
 ```
 3 shards   11 pages / 120 s   0.092 pages/s
 4 shards    8.8 pages / 120 s 0.073 pages/s

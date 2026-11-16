@@ -13,13 +13,13 @@ import json
 import shutil
 import sqlite3
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 
 def utcnow() -> str:
@@ -496,9 +496,32 @@ SELECT
     (SELECT COUNT(*) FROM jobs WHERE state IN ('queued','retry_wait')) AS jobs_pending;
 """
 
+# Migration 3 — read paths for the reading room: concordance lookups, plate listings and
+# page navigation. Indexes only; no canonical data changes shape.
+_M3 = """
+CREATE INDEX IF NOT EXISTS ix_mentions_entity ON mentions (entity_id);
+CREATE INDEX IF NOT EXISTS ix_mentions_evidence ON mentions (evidence_id);
+CREATE INDEX IF NOT EXISTS ix_aliases_entity ON entity_aliases (entity_id);
+CREATE INDEX IF NOT EXISTS ix_entities_type ON entities (entity_type, canonical_name);
+CREATE INDEX IF NOT EXISTS ix_observations_type ON visual_observations (observation_type);
+CREATE INDEX IF NOT EXISTS ix_pages_asset_index ON pages (asset_id, page_index);
+CREATE INDEX IF NOT EXISTS ix_chunks_evidence ON chunk_records (evidence_id);
+"""
+
+# Deleting a page cascades to its transcriptions, and deleting a transcription makes SQLite
+# check transcriptions.supersedes_id for rows that point at it. Without this index that was
+# a scan of every transcription for every one deleted: 200 pages took 134 s and held the
+# write lock the whole time, and every other worker gave up with "database is locked"
+# (15 November 2026, ADR-029).
+_M4 = """
+CREATE INDEX IF NOT EXISTS ix_transcriptions_supersedes ON transcriptions (supersedes_id);
+"""
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "canonical_schema_baseline", _M1),
     Migration(2, "shared_content_objects_across_editions", _M2, requires_foreign_keys_off=True),
+    Migration(3, "reading_room_read_paths", _M3),
+    Migration(4, "index_transcription_supersedes", _M4),
 )
 
 
@@ -519,7 +542,7 @@ class Database:
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA busy_timeout = 60000")
+            connection.execute(f"PRAGMA busy_timeout = {_busy_ms()}")
             # ``journal_mode`` is a property of the database file, not the connection. It
             # used to be re-asserted here on every connect, and because ingestion opens a
             # connection per page that meant three workers serialising on a lock they did
@@ -643,7 +666,9 @@ class Database:
         target.parent.mkdir(parents=True, exist_ok=True)
         if target == self.path:
             raise ValueError("backup destination must differ from the live database")
-        with self.connect() as source, sqlite3.connect(str(target)) as sink:
+        # ``with sqlite3.connect(...)`` only scopes a transaction; it leaves the handle open,
+        # and on Windows an open handle blocks the rename that follows a relocation backup.
+        with self.connect() as source, closing(sqlite3.connect(str(target))) as sink:
             source.backup(sink)
         restored = Database(target)
         check = restored.integrity_check()
@@ -694,6 +719,20 @@ def migration_checksum(migration: Migration) -> str:
     return hashlib.sha256(f"{migration.version}:{migration.name}:{migration.sql}".encode()).hexdigest()
 
 
+def _busy_ms() -> int:
+    """How long a connection waits for another's write to finish before giving up.
+
+    One minute by default. Batch workers are given longer (``AKI_SQLITE_BUSY_MS``): for
+    them a wait costs seconds, while giving up throws away every page of the book in hand.
+    """
+    import os
+
+    try:
+        return max(1000, int(os.environ.get("AKI_SQLITE_BUSY_MS", "60000")))
+    except ValueError:
+        return 60000
+
+
 def _synchronous_mode() -> str:
     """Durability policy for this process.
 
@@ -711,7 +750,7 @@ def initialize(path: str | Path) -> dict[str, Any]:
     """Create or upgrade a database and return a report of what happened."""
     database = Database(path)
     database.path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(str(database.path), timeout=60, isolation_level=None) as setup:
+    with closing(sqlite3.connect(str(database.path), timeout=60, isolation_level=None)) as setup:
         setup.execute("PRAGMA journal_mode = WAL")
     before = database.schema_version()
     applied = database.migrate()

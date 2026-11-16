@@ -1,0 +1,58 @@
+{
+  "product_intent": "A private reading and research room over the 257 books The Holy Word gathered, kept open in memory of Joe Felz. It must let one person read a scanned page beside its transcription, search by word and by meaning, follow names across books, and see where every line came from.",
+  "audience": "Joe's friends and the owner of this archive: people who knew him or his work, reading alone on one Windows computer, usually for a long sitting. Not researchers on a deadline, not the public.",
+  "emotional_objective": "Quiet, sunlit attention. The feeling of being let into a private library by someone who loved the books, with the man remembered in the room's light rather than in a banner.",
+  "creative_thesis": "By day the cell gathers; by night the lamp gives back. Joe wired solar panels and photographed old books: both are the act of catching light. The room is lit by the reader's own sun: its ground, ink and accent follow the local hour, and Joe's two colours trade places as the sun goes. Solar-cell blue is the ink of the day and gilt is the lamp of the night. Everything else is set as the books themselves were set: a title page, a contents leaf, running heads, side-notes, an index with leaders, a colophon.",
+  "anti_generic_risk": [
+    "Dark navy and gold reads as stock 'luxury dark mode'. Countered by making darkness one of five states of a clock-driven light, and by giving day the primary role.",
+    "Parchment skeuomorphism (stained paper, torn edges, fake leather). Refused: paper is flat, clean and lit; age comes only from the real scans.",
+    "Dashboard cards, pills and icon circles. Refused: there are no cards. Structure is carried by rules, leaders, columns and type, as in a printed book.",
+    "Knowledge-graph spaghetti with neon nodes. The names chart is drawn as an engraved star chart with magnitudes and says plainly that it shows shared pages, not relationships."
+  ],
+  "style_world_dna": {
+    "typography": "IM Fell types (Igino Marini's digitisations of the 17th-century Fell types) for titles and display, because a third of this library was printed in faces like them; EB Garamond for reading and for all interface text, with letterspaced small capitals for labels and old-style figures throughout. Monospace appears only for hashes and engine names.",
+    "structure": "The ruling. Manuscripts were pricked and ruled before a word was written; a solar cell is a field ruled by silver busbars. Hairline rules, double rules and dot leaders are the only containers.",
+    "light": "Five keyed palettes (dawn, noon, golden hour, dusk, night) blended by the local clock in OKLab. Light phases put ink on sunlit plaster; dark phases put lamplight on cell blue. Scanned pages are always the brightest surface.",
+    "device": "A printer's device for the room: a woodcut sun with straight and flaming rays whose disc is ruled like a solar cell.",
+    "imagery": "Only the library's own pages and plates. No stock, no generated pictures, no photograph of Joe that we do not have."
+  },
+  "reference_principles": [
+    {
+      "source": "Seventeenth-century English title pages and the Geneva Bible page",
+      "purpose": "Composition of the home page, the reader's side-notes and the index",
+      "why_good": "They rank a dozen pieces of information on one leaf with nothing but size, case, italics, rules and white space, and they put commentary beside the text it glosses.",
+      "transferable_principle": "Hierarchy by typographic contrast and position; commentary lives in the margin, in a smaller italic, beside what it refers to.",
+      "must_not_copy": "No facsimile ornament, no long-s affectation in interface text, no fake wear.",
+      "own_thing_plan": "The margin carries machine cross-references (index names, near passages in other books) labelled honestly as machine work."
+    },
+    {
+      "source": "Engraved celestial atlases (Bayer, Hevelius)",
+      "purpose": "The chart of names that share pages",
+      "why_good": "Star magnitude encodes importance at a glance and the sheet stays calm with hundreds of marks.",
+      "transferable_principle": "Size-coded point marks, hairline joins, labels only where they earn their place.",
+      "must_not_copy": "No constellation figures, no decorative cartouches.",
+      "own_thing_plan": "Magnitude is the count of pages naming the entry; joins are shared pages; a legend says so."
+    },
+    {
+      "source": "Off-grid solar practice (Joe's own trade)",
+      "purpose": "The behaviour of the light",
+      "why_good": "An off-grid day is organised around the sun: gather while it is up, spend carefully after dark.",
+      "transferable_principle": "The interface state follows the sun instead of a toggle the user must discover.",
+      "must_not_copy": "No panel-dashboard gauges, no battery icons.",
+      "own_thing_plan": "A small sundial control shows which light the room is in and lets the reader hold one."
+    }
+  ],
+  "signature_moments": [
+    "Home opens as a book: a plate from the library as frontispiece on the left leaf, the room's title page with the sun device on the right, and a contents leaf below that doubles as navigation and as the count of what is here.",
+    "The room is lit by the reader's clock; the same page read at breakfast and after midnight is in a different light.",
+    "The reader's margin: beside each transcription, the index names on that page and the nearest passages in other books, set as side-notes.",
+    "The chart: the names of the library as an engraved star chart of shared pages."
+  ],
+  "medium_candidates": ["HTML and CSS with custom properties", "inline SVG for the device, ornaments and chart", "vanilla JavaScript modules, no build step"],
+  "resource_strategy": {
+    "fonts": "EB Garamond and IM Fell, both SIL OFL 1.1, bundled in the app with their licence texts and served from this computer.",
+    "images": "The library's own scans, shown under the recorded render_pages permission and never leaving the machine.",
+    "code": "No third-party runtime code; the content-security policy stays at 'self'."
+  },
+  "evidence_plan": "Run the real server over the real archive; inspect home, library, reader, search, index, entry, chart, plates, research, Joe and colophon at 1440, 900 and 390 wide, in noon and night light; check console and failed requests; keyboard pass; contrast check on every palette's text pairs; API and route tests in pytest."
+}

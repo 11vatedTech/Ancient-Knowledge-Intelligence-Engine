@@ -37,7 +37,7 @@ What the vision asks for next, in order of value per effort:
 1. **Cited answers — built (ADR-031).** Research page: "Answer" (Qwen 3.5 9B) and
    "Think harder" (Gemma 4 26B), both local through Ollama. Every sentence is checked
    against the page it cites and withheld if it fails; the run, the passages and each
-   sentence are recorded as a case, a model run, evidence and claims. Not committed yet.
+   sentence are recorded as a case, a model run, evidence and claims. Commit `2582874`.
 2. **Comparing sources** — the same packet grouped by book, so the model can say where
    books agree, differ or contradict each other, always quoting.
 3. **Entity extraction beyond the curated list** — proposed people, places and works,
